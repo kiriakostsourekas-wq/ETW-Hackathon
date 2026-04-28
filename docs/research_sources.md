@@ -9,10 +9,19 @@ This file tracks sources we can cite in code comments, docs, notebooks, and slid
   - Direct ResultsSummary pattern: `https://www.enexgroup.gr/documents/20126/366820/YYYYMMDD_EL-DAM_ResultsSummary_EN_v##.xlsx`
 - IPTO/ADMIE market statistics API: https://www.admie.gr/en/market/market-statistics/file-download-api
   - Use for load forecasts, RES forecasts, SCADA load/RES, imports/exports.
+  - Internal catalogue: `docs/admie_market_data_catalog.md`.
 - Open-Meteo API docs: https://open-meteo.com/en/docs
   - Use for weather predictors: radiation, cloud cover, wind, temperature.
 - ENTSO-E Transparency Platform API guide: https://transparency.entsoe.eu/content/static_content/Static%20content/web%20api/Guide_prod_backup_06_11_2024.html
   - Use as fallback/cross-check for price, load, generation, and cross-border signals.
+- Forecasting signal plan: `docs/forecasting_signal_plan.md`
+  - Use for source scoring, live-feature timing, and leakage boundaries.
+- RAAEY energy surplus monitoring: https://www.raaey.gr/energeia/en/market-monitoring/greek-wholesale-electricity-markets/electricity-prices-statistics/estimated-energy-surplus-of-the-day-ahead-market/
+- RAAEY DAM energy mix: https://www.raaey.gr/energeia/en/market-monitoring/greek-wholesale-electricity-markets/electricity-prices-statistics/energymixdam/
+- IBEX Bulgarian DAM prices: https://ibex.bg/markets/dam/day-ahead-prices-and-volumes-v2-0-2/
+- GME Italian electricity market results: https://www.mercatoelettrico.org/en-us/Home/Results/Electricity/MGP
+- ICE Dutch TTF futures: https://www.ice.com/products/27996665/Dutch-TTF-Gas-Futures/data
+- EEX Market Data Hub: https://www.eex.com/en/market-data/market-data-hub
 
 ## Italy Analogue Market
 
@@ -33,13 +42,33 @@ This file tracks sources we can cite in code comments, docs, notebooks, and slid
 
 Use Italy as an analogue for market design, storage procurement, technical assumptions, and revenue stacking. Do not use Italian BESS behavior as direct Greek training labels without clearly stating transfer-learning risk.
 
+## Spain Analogue Market
+
+- Red Electrica / REData electricity data: https://www.ree.es/en/datos
+- OMIE market results: https://www.omie.es/en/market-results
+- Spain BESS and renewable-integration studies are useful for PV-heavy price-shape and balancing-risk analogues, but should not be used as direct labels for Greek battery dispatch.
+
 ## Battery And METLEN Sources
 
 - METLEN + Karatzis 330 MW / 790 MWh standalone BESS: https://www.metlen.com/news/press-releases/strategic-agreement-between-metlen-and-karatzis-group-for-the-largest-standalone-energy-storage-unit-in-greece/
+  - Model as 330 MW power and 790 MWh nameplate energy; report usable energy separately under the chosen SoC band.
+  - Use 85% round-trip efficiency as the base sensitivity and 90% as the optimistic sensitivity unless stronger vendor data becomes available.
+  - Treat cycle budget and degradation cost as sensitivities, not public fixed facts.
 - METLEN + Tsakos 251.9 MW PV + 375 MWh storage: https://www.metlen.com/news/press-releases/strategic-partnership-between-metlen-and-tsakos-group-for-one-of-greece-s-largest-hybrid-power-generation-projects/
 - MYTILINEOS/METLEN 48 MW / 96 MWh storage unit: https://www.metlen.com/news/press-releases/mytilineos-undertakes-a-48mw-96mwh-energy-storage-unit/
 - NREL ATB utility-scale battery storage: https://atb.nrel.gov/electricity/2024b/utility-scale_battery_storage
 - NREL 2025 utility-scale battery cost projections: https://www.nrel.gov/docs/fy25osti/93281.pdf
+
+## Comparable GitHub Implementations
+
+- FlexPwr BESS optimizer: https://github.com/FlexPwr/bess-optimizer
+  - Closest public analogue for 96-interval BESS market scheduling and written formulation.
+- NYISO battery dispatch model: https://github.com/gschivley/battery_model
+  - Clean day-ahead arbitrage and annual backtest reporting reference.
+- CAISO energy plus ancillary-service co-optimization: https://github.com/romilandc/battery-storage-optimization-energy-ancillary
+  - Reference for future value stacking beyond DAM.
+
+See `docs/comparable_project_analysis.md` for the scoring and implementation mapping.
 
 ## Leakage Notes
 

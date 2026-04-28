@@ -76,6 +76,10 @@ Without `ENTSOE_SECURITY_TOKEN`, the script only verifies that the ENTSO-E API e
 - IPTO Operation & Market Files API: https://www.admie.gr/en/market/market-statistics/file-download-api
 - Open-Meteo API: https://open-meteo.com/en/docs
 
+See `docs/admie_market_data_catalog.md` for ADMIE/IPTO filetypes worth integrating later.
+See `docs/forecasting_signal_plan.md` for the ranked forecasting signal and leakage plan.
+See `docs/comparable_project_analysis.md` for the top GitHub analogue repositories we used to benchmark the simulator design.
+
 ## Demo Narrative
 
 Greece has increasing solar/wind penetration, more midday surplus and curtailment risk, and stronger 15-minute price volatility. The battery charges when prices are low and RES output is high, then discharges into scarcity or evening peak intervals. The prototype avoids dependence on historical battery telemetry by using public market/system/weather signals plus explicit battery constraints.

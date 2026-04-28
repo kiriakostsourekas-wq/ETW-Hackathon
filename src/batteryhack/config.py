@@ -22,6 +22,11 @@ IPTO_FILE_API = (
     "https://www.admie.gr/getOperationMarketFilewRange"
     "?dateStart={date_iso}&dateEnd={date_iso}&FileCategory={filetype}"
 )
+IPTO_FILE_API_EXACT = (
+    "https://www.admie.gr/getOperationMarketFile"
+    "?dateStart={date_iso}&dateEnd={date_iso}&FileCategory={filetype}"
+)
+IPTO_FILETYPE_INFO_URL = "https://www.admie.gr/getFiletypeInfoEN"
 
 ENTSOE_API_URL = "https://web-api.tp.entsoe.eu/api"
 ENTSOE_SECURITY_TOKEN_ENV = "ENTSOE_SECURITY_TOKEN"

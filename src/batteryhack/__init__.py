@@ -3,9 +3,12 @@
 __all__ = [
     "analytics",
     "backtest",
+    "comparable_projects",
     "config",
     "data_sources",
     "forecasting",
     "optimizer",
+    "presets",
+    "signal_catalog",
     "synthetic",
 ]

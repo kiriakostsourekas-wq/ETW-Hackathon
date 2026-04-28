@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -11,11 +12,25 @@ from plotly.subplots import make_subplots
 
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from batteryhack.analytics import action_windows, heuristic_threshold_schedule, validate_market_frame
-from batteryhack.config import DEFAULT_DEMO_DATE, SOURCE_LINKS
+from batteryhack.analytics import (
+    action_windows,
+    heuristic_threshold_schedule,
+    validate_market_frame,
+)
+from batteryhack.config import DEFAULT_DEMO_DATE, MTU_HOURS, SOURCE_LINKS
+from batteryhack.comparable_projects import TOP_COMPARABLE_PROJECTS, comparable_projects_table
 from batteryhack.data_sources import load_market_bundle
-from batteryhack.forecasting import structural_price_forecast
+from batteryhack.forecasting import forecast_price_with_uncertainty
 from batteryhack.optimizer import BatteryParams, optimize_battery_schedule
+from batteryhack.presets import (
+    BATTERY_PRESETS,
+    METLEN_BASE_EFFICIENCY,
+    METLEN_CYCLE_SENSITIVITIES,
+    METLEN_DEGRADATION_SENSITIVITIES,
+    METLEN_OPTIMISTIC_EFFICIENCY,
+    METLEN_PRESET_NAME,
+)
+from batteryhack.signal_catalog import ranked_signal_candidates
 
 
 st.set_page_config(
@@ -65,6 +80,160 @@ def format_mwh(value: float) -> str:
     return f"{value:,.1f} MWh"
 
 
+def format_mw(value: float) -> str:
+    return f"{value:,.0f} MW"
+
+
+def settle_schedule_on_actual_prices(
+    schedule: pd.DataFrame,
+    market: pd.DataFrame,
+    params: BatteryParams,
+    optimization_price_col: str,
+) -> tuple[pd.DataFrame, dict[str, float]]:
+    """Reprice a forecast-built schedule against actual DAM for realized metrics."""
+    output = schedule.copy()
+    if optimization_price_col in output:
+        output["optimization_price_eur_mwh"] = output[optimization_price_col]
+
+    if "dam_price_eur_mwh" not in output.columns:
+        output = output.merge(
+            market[["timestamp", "dam_price_eur_mwh"]],
+            on="timestamp",
+            how="left",
+        )
+
+    actual_prices = pd.to_numeric(output["dam_price_eur_mwh"], errors="coerce").to_numpy(float)
+    charge = output["charge_mw"].to_numpy(float)
+    discharge = output["discharge_mw"].to_numpy(float)
+    throughput = charge + discharge
+
+    output["gross_revenue_eur"] = actual_prices * (discharge - charge) * MTU_HOURS
+    output["degradation_cost_eur"] = params.degradation_cost_eur_mwh * throughput * MTU_HOURS
+    output["net_revenue_eur"] = output["gross_revenue_eur"] - output["degradation_cost_eur"]
+
+    charged_mwh = float(output["charge_mw"].sum() * MTU_HOURS)
+    discharged_mwh = float(output["discharge_mw"].sum() * MTU_HOURS)
+    avg_charge_price = (
+        float((actual_prices * charge * MTU_HOURS).sum() / charged_mwh)
+        if charged_mwh > 1e-9
+        else 0.0
+    )
+    avg_discharge_price = (
+        float((actual_prices * discharge * MTU_HOURS).sum() / discharged_mwh)
+        if discharged_mwh > 1e-9
+        else 0.0
+    )
+
+    metrics = {
+        "gross_revenue_eur": float(output["gross_revenue_eur"].sum()),
+        "degradation_cost_eur": float(output["degradation_cost_eur"].sum()),
+        "net_revenue_eur": float(output["net_revenue_eur"].sum()),
+        "charged_mwh": charged_mwh,
+        "discharged_mwh": discharged_mwh,
+        "equivalent_cycles": discharged_mwh / params.capacity_mwh,
+        "avg_charge_price_eur_mwh": avg_charge_price,
+        "avg_discharge_price_eur_mwh": avg_discharge_price,
+        "captured_spread_eur_mwh": avg_discharge_price - avg_charge_price,
+    }
+    return output, metrics
+
+
+def optimize_for_mode(
+    market: pd.DataFrame,
+    params: BatteryParams,
+    market_mode: str,
+) -> tuple[pd.DataFrame, dict[str, float], str]:
+    price_col = (
+        "forecast_price_eur_mwh"
+        if market_mode.startswith("Forecast")
+        else "dam_price_eur_mwh"
+    )
+    output = optimize_battery_schedule(market, params, price_col=price_col)
+    schedule, metrics = settle_schedule_on_actual_prices(output.schedule, market, params, price_col)
+    return schedule, metrics, output.status
+
+
+def build_sensitivity_frame(
+    market: pd.DataFrame,
+    base_params: BatteryParams,
+    market_mode: str,
+) -> pd.DataFrame:
+    rows: list[dict[str, float | str]] = []
+    for efficiency in (METLEN_BASE_EFFICIENCY, METLEN_OPTIMISTIC_EFFICIENCY):
+        for cycle_limit in METLEN_CYCLE_SENSITIVITIES:
+            for degradation in METLEN_DEGRADATION_SENSITIVITIES:
+                case_params = replace(
+                    base_params,
+                    round_trip_efficiency=efficiency,
+                    max_cycles_per_day=cycle_limit,
+                    degradation_cost_eur_mwh=degradation,
+                )
+                try:
+                    _, case_metrics, status = optimize_for_mode(market, case_params, market_mode)
+                    rows.append(
+                        {
+                            "efficiency_pct": efficiency * 100,
+                            "cycle_limit": cycle_limit,
+                            "degradation_eur_mwh": degradation,
+                            "net_revenue_eur": case_metrics["net_revenue_eur"],
+                            "gross_revenue_eur": case_metrics["gross_revenue_eur"],
+                            "degradation_cost_eur": case_metrics["degradation_cost_eur"],
+                            "discharged_mwh": case_metrics["discharged_mwh"],
+                            "equivalent_cycles": case_metrics["equivalent_cycles"],
+                            "captured_spread_eur_mwh": case_metrics["captured_spread_eur_mwh"],
+                            "status": status,
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    rows.append(
+                        {
+                            "efficiency_pct": efficiency * 100,
+                            "cycle_limit": cycle_limit,
+                            "degradation_eur_mwh": degradation,
+                            "net_revenue_eur": 0.0,
+                            "gross_revenue_eur": 0.0,
+                            "degradation_cost_eur": 0.0,
+                            "discharged_mwh": 0.0,
+                            "equivalent_cycles": 0.0,
+                            "captured_spread_eur_mwh": 0.0,
+                            "status": f"failed: {exc}",
+                        }
+                    )
+    return pd.DataFrame(rows)
+
+
+def build_sensitivity_heatmap(sensitivity: pd.DataFrame, efficiency_pct: float) -> go.Figure:
+    subset = sensitivity[sensitivity["efficiency_pct"] == efficiency_pct]
+    pivot = subset.pivot(
+        index="degradation_eur_mwh",
+        columns="cycle_limit",
+        values="net_revenue_eur",
+    ).sort_index(ascending=False)
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=pivot.values,
+            x=[f"{value:.1f}" for value in pivot.columns],
+            y=[f"{value:.0f}" for value in pivot.index],
+            colorscale="RdYlGn",
+            colorbar=dict(title="EUR"),
+            hovertemplate=(
+                "Cycles %{x}/day<br>"
+                "Degradation %{y} EUR/MWh<br>"
+                "Net revenue EUR %{z:,.0f}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        height=330,
+        margin=dict(l=10, r=10, t=35, b=10),
+        xaxis_title="Cycle budget",
+        yaxis_title="Degradation cost",
+        plot_bgcolor="#ffffff",
+        paper_bgcolor="#ffffff",
+    )
+    return fig
+
+
 def build_dispatch_chart(frame: pd.DataFrame, schedule: pd.DataFrame) -> go.Figure:
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     fig.add_trace(
@@ -89,6 +258,32 @@ def build_dispatch_chart(frame: pd.DataFrame, schedule: pd.DataFrame) -> go.Figu
         ),
         secondary_y=False,
     )
+    if {"forecast_low_eur_mwh", "forecast_high_eur_mwh"}.issubset(frame.columns):
+        fig.add_trace(
+            go.Scatter(
+                x=frame["timestamp"],
+                y=frame["forecast_high_eur_mwh"],
+                name="Forecast band",
+                mode="lines",
+                line=dict(color="rgba(100,116,139,0)", width=0),
+                hoverinfo="skip",
+                showlegend=False,
+            ),
+            secondary_y=False,
+        )
+        fig.add_trace(
+            go.Scatter(
+                x=frame["timestamp"],
+                y=frame["forecast_low_eur_mwh"],
+                name="Forecast uncertainty",
+                mode="lines",
+                fill="tonexty",
+                fillcolor="rgba(100,116,139,0.16)",
+                line=dict(color="rgba(100,116,139,0)", width=0),
+                hoverinfo="skip",
+            ),
+            secondary_y=False,
+        )
     fig.add_trace(
         go.Bar(
             x=schedule["timestamp"],
@@ -206,29 +401,99 @@ with st.sidebar:
     )
     preset = st.selectbox(
         "Asset preset",
-        ["10 MW / 20 MWh", "20 MW / 80 MWh", "Custom"],
+        list(BATTERY_PRESETS),
     )
-    if preset == "10 MW / 20 MWh":
-        default_power, default_capacity = 10.0, 20.0
-    elif preset == "20 MW / 80 MWh":
-        default_power, default_capacity = 20.0, 80.0
-    else:
-        default_power, default_capacity = 10.0, 40.0
+    selected_preset = BATTERY_PRESETS[preset]
 
-    power_mw = st.number_input("Power MW", min_value=1.0, max_value=500.0, value=default_power, step=1.0)
+    st.caption(
+        f"Duration {selected_preset.duration_hours:.2f}h | "
+        f"usable energy {selected_preset.usable_energy_mwh:,.0f} MWh under "
+        f"{selected_preset.min_soc_pct:.0f}-{selected_preset.max_soc_pct:.0f}% SoC."
+    )
+
+    power_mw = st.number_input(
+        "Power MW",
+        min_value=1.0,
+        max_value=1000.0,
+        value=selected_preset.power_mw,
+        step=1.0,
+    )
     capacity_mwh = st.number_input(
         "Capacity MWh",
         min_value=1.0,
-        max_value=2000.0,
-        value=default_capacity,
+        max_value=5000.0,
+        value=selected_preset.capacity_mwh,
         step=5.0,
     )
-    round_trip_efficiency = st.slider("Round-trip efficiency", 0.70, 0.98, 0.90, 0.01)
-    degradation_cost = st.slider("Degradation cost EUR/MWh throughput", 0.0, 25.0, 4.0, 0.5)
-    min_soc, max_soc = st.slider("Operating SoC range", 0, 100, (10, 90), 5)
-    initial_soc = st.slider("Initial and terminal SoC", min_soc, max_soc, 50, 5)
-    use_cycle_limit = st.checkbox("Limit daily cycles")
-    max_cycles = st.slider("Max equivalent cycles", 0.25, 3.0, 1.5, 0.25) if use_cycle_limit else None
+    st.caption(f"Current duration: {capacity_mwh / power_mw:.2f} hours")
+
+    round_trip_efficiency = st.slider(
+        "Round-trip efficiency",
+        0.70,
+        0.98,
+        selected_preset.round_trip_efficiency,
+        0.01,
+        help="METLEN case uses 85% base and 90% optimistic sensitivity.",
+    )
+    degradation_cost = st.number_input(
+        "Degradation cost EUR/MWh throughput",
+        min_value=0.0,
+        max_value=100.0,
+        value=selected_preset.degradation_cost_eur_mwh,
+        step=0.5,
+        help="Sensitivity assumption only; not a public fixed fact.",
+    )
+    min_soc, max_soc = st.slider(
+        "Operating SoC range",
+        0,
+        100,
+        (int(selected_preset.min_soc_pct), int(selected_preset.max_soc_pct)),
+        5,
+    )
+    initial_soc = st.slider(
+        "Initial SoC",
+        min_soc,
+        max_soc,
+        int(selected_preset.initial_soc_pct),
+        5,
+    )
+    terminal_soc = st.slider(
+        "Terminal SoC",
+        min_soc,
+        max_soc,
+        int(selected_preset.terminal_soc_pct),
+        5,
+    )
+    cycle_options = ["No limit", "0.5 cycles/day", "1.0 cycles/day", "1.5 cycles/day", "Custom"]
+    default_cycle = (
+        f"{selected_preset.max_cycles_per_day:.1f} cycles/day"
+        if selected_preset.max_cycles_per_day is not None
+        else "No limit"
+    )
+    cycle_choice = st.selectbox(
+        "Cycle budget",
+        cycle_options,
+        index=cycle_options.index(default_cycle) if default_cycle in cycle_options else 0,
+    )
+    if cycle_choice == "No limit":
+        max_cycles = None
+    elif cycle_choice == "Custom":
+        max_cycles = st.slider("Custom max equivalent cycles", 0.25, 3.0, 1.0, 0.25)
+    else:
+        max_cycles = float(cycle_choice.split()[0])
+
+    market_mode = st.selectbox(
+        "Scheduling mode",
+        ["Oracle DAM prices", "Forecast proxy schedule"],
+        help=(
+            "Oracle uses published DAM prices as the scheduling signal. Forecast proxy optimizes "
+            "against the transparent forecast, then settles the result against actual DAM prices."
+        ),
+    )
+    run_sensitivity = st.checkbox(
+        "Run METLEN sensitivity grid",
+        value=preset == METLEN_PRESET_NAME,
+    )
 
 params = BatteryParams(
     power_mw=power_mw,
@@ -237,25 +502,33 @@ params = BatteryParams(
     min_soc_pct=float(min_soc),
     max_soc_pct=float(max_soc),
     initial_soc_pct=float(initial_soc),
-    terminal_soc_pct=float(initial_soc),
+    terminal_soc_pct=float(terminal_soc),
     degradation_cost_eur_mwh=degradation_cost,
     max_cycles_per_day=max_cycles,
 )
 
 st.title("Greek Day-Ahead Battery Optimizer")
-st.caption("Constraint-aware BESS scheduling for Greece's 15-minute Day-Ahead Market.")
+st.caption(
+    "Constraint-aware BESS scheduling for Greece's 15-minute Day-Ahead Market, "
+    "including a METLEN-scale 330 MW / 790 MWh case."
+)
 
 with st.spinner("Loading market, system, and weather data..."):
     market, sources, warnings = cached_bundle(delivery_date.isoformat())
 
 market = market.copy()
-market["forecast_price_eur_mwh"] = structural_price_forecast(market)
+forecast_output = forecast_price_with_uncertainty(pd.DataFrame(), market)
+for column in [
+    "forecast_price_eur_mwh",
+    "forecast_low_eur_mwh",
+    "forecast_high_eur_mwh",
+    "forecast_model",
+]:
+    market[column] = forecast_output.frame[column]
 validation_issues = validate_market_frame(market)
 
 try:
-    output = optimize_battery_schedule(market, params)
-    schedule = output.schedule
-    metrics = output.metrics
+    schedule, metrics, optimization_status = optimize_for_mode(market, params, market_mode)
 except Exception as exc:  # noqa: BLE001
     st.error(f"Optimization failed: {exc}")
     st.stop()
@@ -282,8 +555,17 @@ metric_cols[3].metric("Discharged", format_mwh(metrics["discharged_mwh"]))
 metric_cols[4].metric("Cycles", f"{metrics['equivalent_cycles']:.2f}")
 metric_cols[5].metric("Spread captured", f"{metrics['captured_spread_eur_mwh']:.1f} EUR/MWh")
 
-tab_dispatch, tab_signals, tab_story, tab_data = st.tabs(
-    ["Dispatch", "Forecast Signals", "Business Case", "Data"]
+asset_cols = st.columns(4)
+asset_cols[0].metric("Power", format_mw(params.power_mw))
+asset_cols[1].metric("Nameplate energy", format_mwh(params.capacity_mwh))
+asset_cols[2].metric("Duration", f"{params.capacity_mwh / params.power_mw:.2f}h")
+asset_cols[3].metric(
+    "Usable SoC band",
+    format_mwh(params.capacity_mwh * (params.max_soc_pct - params.min_soc_pct) / 100.0),
+)
+
+tab_dispatch, tab_sensitivity, tab_signals, tab_research, tab_data = st.tabs(
+    ["Dispatch", "Sensitivity", "Signals", "Research", "Data"]
 )
 
 with tab_dispatch:
@@ -308,19 +590,64 @@ with tab_dispatch:
             )
         st.metric("Uplift vs threshold heuristic", format_eur(uplift))
 
+with tab_sensitivity:
+    st.subheader("METLEN Assumption Grid")
+    st.write(
+        "This grid keeps the selected power and energy fixed, using 330 MW / 790 MWh for "
+        "the METLEN preset, and varies the uncertain parameters from the project brief: "
+        "efficiency, cycle budget, and degradation cost."
+    )
+    if run_sensitivity:
+        with st.spinner("Running sensitivity cases..."):
+            sensitivity = build_sensitivity_frame(market, params, market_mode)
+        selected_efficiency = st.selectbox(
+            "Heatmap efficiency",
+            sorted(sensitivity["efficiency_pct"].unique()),
+            index=0 if round_trip_efficiency <= 0.875 else 1,
+            format_func=lambda value: f"{value:.0f}%",
+        )
+        st.plotly_chart(
+            build_sensitivity_heatmap(sensitivity, float(selected_efficiency)),
+            use_container_width=True,
+        )
+        st.dataframe(
+            sensitivity.round(
+                {
+                    "efficiency_pct": 0,
+                    "cycle_limit": 2,
+                    "degradation_eur_mwh": 1,
+                    "net_revenue_eur": 0,
+                    "gross_revenue_eur": 0,
+                    "degradation_cost_eur": 0,
+                    "discharged_mwh": 1,
+                    "equivalent_cycles": 2,
+                    "captured_spread_eur_mwh": 1,
+                }
+            ),
+            hide_index=True,
+            use_container_width=True,
+        )
+    else:
+        st.info("Enable the sensitivity grid in the sidebar to run the full METLEN scenario set.")
+
 with tab_signals:
     st.plotly_chart(build_system_chart(market), use_container_width=True)
     signal_cols = st.columns(4)
     signal_cols[0].metric("Avg DAM", f"{market['dam_price_eur_mwh'].mean():.1f} EUR/MWh")
     signal_cols[1].metric("Min DAM", f"{market['dam_price_eur_mwh'].min():.1f} EUR/MWh")
     signal_cols[2].metric("Max DAM", f"{market['dam_price_eur_mwh'].max():.1f} EUR/MWh")
-    signal_cols[3].metric("Avg net load", f"{(market['load_forecast_mw'] - market['res_forecast_mw']).mean():,.0f} MW")
+    signal_cols[3].metric(
+        "Avg net load",
+        f"{(market['load_forecast_mw'] - market['res_forecast_mw']).mean():,.0f} MW",
+    )
     st.dataframe(
         market[
             [
                 "timestamp",
                 "dam_price_eur_mwh",
                 "forecast_price_eur_mwh",
+                "forecast_low_eur_mwh",
+                "forecast_high_eur_mwh",
                 "load_forecast_mw",
                 "res_forecast_mw",
                 "shortwave_radiation",
@@ -332,34 +659,102 @@ with tab_signals:
         use_container_width=True,
     )
 
-with tab_story:
-    st.subheader("Why this is valuable")
+with tab_research:
+    st.subheader("Data-Scarce Modeling Logic")
     st.write(
-        "The optimizer converts Greece's 15-minute DAM volatility into a feasible charge, "
-        "idle, and discharge schedule while respecting power, energy, efficiency, SoC, "
-        "terminal SoC, degradation, and optional cycle constraints."
+        "The project brief explicitly assumes scarce asset telemetry. The schedule is therefore "
+        "built from public market, system, and weather signals plus hard battery constraints, "
+        "instead of learning from historical Greek standalone BESS behavior."
+    )
+    st.subheader("METLEN-Scale Case")
+    st.write(
+        "The METLEN/Karatzis standalone storage project is modeled as a 330 MW / 790 MWh "
+        "battery. The app treats 790 MWh as nameplate energy and reports the usable energy "
+        "inside the selected SoC band separately."
     )
     st.write(
-        "This is built for the realistic Greek starting point: market, system, and weather "
-        "data are public, but standalone battery telemetry is scarce because BESS market "
-        "participation only recently started."
+        "Round-trip efficiency, degradation cost, cycle budget, and starting/ending SoC are "
+        "not treated as fixed public facts. They are exposed as assumptions because they can "
+        "materially change dispatch and revenue."
     )
-    st.subheader("METLEN angle")
+    st.subheader("Analogues")
     st.write(
-        "METLEN has announced large Greek standalone and hybrid storage projects. A tool "
-        "like this can support merchant dispatch planning, revenue sensitivity, and operator "
-        "explainability before mature local battery histories exist."
+        "Italy is the closest market-design and Mediterranean-climate analogue for storage "
+        "procurement and fast reserve framing. Spain is useful for PV/wind-heavy price-shape "
+        "analogues, but its storage behavior should not be used as Greek training labels."
+    )
+    st.subheader("Top GitHub Analogues")
+    st.dataframe(
+        pd.DataFrame(comparable_projects_table())[
+            [
+                "rank",
+                "project",
+                "region",
+                "market_scope",
+                "similarity_score",
+                "what_we_can_get",
+            ]
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+    for project in TOP_COMPARABLE_PROJECTS:
+        with st.expander(f"{project.rank}. {project.name} - {project.similarity_score}/100"):
+            st.markdown(f"[Repository]({project.url})")
+            st.write(project.mental_model)
+            st.write("Reusable patterns: " + " ".join(project.reusable_patterns))
+            st.write("Embedded here: " + " ".join(project.embedded_decisions))
+            st.write("Caution: " + project.caution)
+    st.subheader("Model Boundaries")
+    st.write(
+        "The default model is price-taker DAM arbitrage. It does not currently estimate price "
+        "impact, balancing-market revenue, ancillary services, network constraints, tax effects, "
+        "or vendor-specific thermal derating."
     )
     st.subheader("Source map")
+    candidates = ranked_signal_candidates()
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "segment": candidate.segment,
+                    "signal": candidate.signal,
+                    "source": candidate.source,
+                    "timing": candidate.timing_class,
+                    "score": candidate.total_score,
+                    "live": candidate.live_eligible,
+                    "influence": candidate.influence,
+                }
+                for candidate in candidates
+            ]
+        ),
+        hide_index=True,
+        use_container_width=True,
+    )
     st.markdown(
         "\n".join(
             [
                 f"- [{name}]({url})"
                 for name, url in {
                     **SOURCE_LINKS,
-                    "METLEN standalone BESS": "https://www.metlengroup.com/news/press-releases/strategic-agreement-between-metlen-and-karatzis-group-for-the-largest-standalone-energy-storage-unit-in-greece/",
-                    "METLEN hybrid project": "https://www.metlengroup.com/news/press-releases/strategic-partnership-between-metlen-and-tsakos-group-for-one-of-greece-s-largest-hybrid-power-generation-projects/",
-                    "Green Tank curtailments": "https://thegreentank.gr/en/2026/02/02/admie-dec25-en/",
+                    "METLEN standalone BESS": (
+                        "https://www.metlengroup.com/news/press-releases/"
+                        "strategic-agreement-between-metlen-and-karatzis-group-for-the-"
+                        "largest-standalone-energy-storage-unit-in-greece/"
+                    ),
+                    "METLEN hybrid project": (
+                        "https://www.metlengroup.com/news/press-releases/"
+                        "strategic-partnership-between-metlen-and-tsakos-group-for-one-"
+                        "of-greece-s-largest-hybrid-power-generation-projects/"
+                    ),
+                    "Terna storage reference study": (
+                        "https://download.terna.it/terna/"
+                        "Study_on_reference_technologies_for_electricity_storage_"
+                        "January_2025_8de0262c6cf17ee.pdf"
+                    ),
+                    "Green Tank curtailments": (
+                        "https://thegreentank.gr/en/2026/02/02/admie-dec25-en/"
+                    ),
                 }.items()
             ]
         )
@@ -369,6 +764,8 @@ with tab_data:
     st.subheader("Loaded sources")
     for name, source in sources.items():
         st.write(f"**{name}:** {source}")
+    st.write(f"**Scheduling mode:** {market_mode}")
+    st.write(f"**Optimizer status:** {optimization_status}")
     st.subheader("Dispatch table")
     display = schedule.merge(
         market[
