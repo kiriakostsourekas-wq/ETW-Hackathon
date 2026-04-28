@@ -1,0 +1,28 @@
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Local runtime files
+*.log
+*.pid
+.streamlit/secrets.toml
+
+# Secrets and machine-specific config
+.env
+.env.*
+!.env.example
+
+# Generated data/cache. Keep folder placeholders only.
+data/raw/*
+!data/raw/.gitkeep
+data/cache/*
+!data/cache/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
