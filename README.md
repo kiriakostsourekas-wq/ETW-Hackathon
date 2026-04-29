@@ -11,6 +11,34 @@ streamlit run app.py
 
 The default demo date is `2026-04-22`, which has public HEnEx/IPTO files available. If a source is unavailable, the app fills missing columns with deterministic synthetic data so the live demo remains stable.
 
+## React Dashboard
+
+The React dashboard is under `frontend/` and reads live JSON from the Python optimizer API.
+
+Terminal 1:
+
+```bash
+PYTHONPATH=src python3 -m batteryhack.api_server --port 8000
+```
+
+Terminal 2:
+
+```bash
+cd frontend
+npm install
+npm run dev -- --port 5173
+```
+
+Open `http://127.0.0.1:5173/`. The default dashboard request uses the public-data demo day `2026-04-22`, a METLEN-scale `330 MW / 790 MWh` battery, 85% round-trip efficiency, a 1.5 equivalent-cycle daily budget, and a light 8-day forecast refresh for faster first load.
+
+Useful API query controls:
+
+- `include_forecast=false` skips model training and returns the fast DAM optimizer payload.
+- `forecast_history_days=21` controls the training/lookback window used by the dashboard request.
+- `validation_days=3` controls the walk-forward model selection window.
+- `impact_scenario=Storage-aware medium impact` selects the storage feedback scenario.
+- `fleet_power_mw`, `fleet_energy_mwh`, `charge_price_elasticity_eur_mwh_per_gw`, `discharge_price_elasticity_eur_mwh_per_gw`, and `spread_compression_factor` override the scenario assumptions.
+
 ## Collaboration Setup
 
 Clone the shared repo:
@@ -38,7 +66,10 @@ Generated data is intentionally ignored by git. Use the scripts below to recreat
 - `src/batteryhack/optimizer.py`: SciPy HiGHS MILP battery scheduler with SoC, power, efficiency, terminal SoC, degradation, cycle, and single charge/discharge mode constraints.
 - `src/batteryhack/price_impact.py`: counterfactual storage-feedback scenarios that lift charging intervals, suppress discharging intervals, and estimate spread compression versus the price-taker baseline.
 - `src/batteryhack/forecasting.py`: explainable structural forecast proxy and Ridge model hook for deeper history.
+- `src/batteryhack/production_forecast.py`: leakage-safe forecast table builder, walk-forward model selection, model registry, storage-aware forecast adjustment, and realized/oracle value metrics.
+- `src/batteryhack/api_server.py`: JSON API for the React dashboard, backed by HEnEx/IPTO/Open-Meteo ingestion and the MILP optimizer.
 - `app.py`: Streamlit dashboard with a submission story, METLEN dispatch, storage-aware regime-shift comparison, sensitivity grid, and source traceability.
+- `frontend/`: React/Tailwind/Recharts dashboard that consumes the optimizer API.
 - `docs/METLEN_BESS_submission_walkthrough.pptx`: six-slide editable teammate deck covering thesis, Greek problem, operational loop, data stack, simulator method, and caveats.
 - `tests/`: optimizer and data-contract tests.
 
@@ -69,6 +100,19 @@ Outputs are written to `data/processed/march_smoke_model_performance.csv`,
 `data/processed/march_smoke_daily_model_performance.csv`, and
 `data/processed/march_smoke_dispatch.csv`.
 
+## Train The Production Forecast Registry
+
+```bash
+PYTHONPATH=src python3 scripts/train_forecast_registry.py --target-date 2026-04-22
+```
+
+This builds the live-safe feature table, runs walk-forward model selection, generates the base and storage-adjusted 15-minute price forecast, then writes:
+
+- `data/processed/forecast_model_registry.json`
+- `data/processed/storage_aware_forecast.csv`
+
+The registry records the selected model, feature columns, validation metrics, training window, source summary, leakage audit, and storage price-impact assumptions.
+
 ## Sample HEnEx 15-Minute Prices
 
 ```bash
@@ -93,6 +137,7 @@ Without `ENTSOE_SECURITY_TOKEN`, the script only verifies that the ENTSO-E API e
 
 See `docs/admie_market_data_catalog.md` for ADMIE/IPTO filetypes worth integrating later.
 See `docs/forecasting_signal_plan.md` for the ranked forecasting signal and leakage plan.
+See `docs/model_logic_and_forecasting.md` for the MILP optimizer, forecast pipeline, and battery regime-change explanation.
 See `docs/comparable_project_analysis.md` for the top GitHub analogue repositories we used to benchmark the simulator design.
 See `docs/METLEN_BESS_submission_walkthrough.pptx` for the short teammate walkthrough deck.
 

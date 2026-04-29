@@ -48,6 +48,30 @@ The implemented mitigation is a storage-aware scenario layer:
   slightly lower validation RMSE but higher MAE than histogram gradient boosting.
 - Uncertainty: residual scenario band from historical interval-profile errors.
 
+## Production Forecast Pipeline
+
+The production pipeline is implemented in `src/batteryhack/production_forecast.py`.
+
+1. Build a feature table from HEnEx DAM labels, IPTO load/RES forecasts, Open-Meteo weather,
+   calendar features, and lagged historical price shape.
+2. Run walk-forward validation only on dates before the target delivery day.
+3. Select among `structural_proxy`, `interval_profile`, `ridge`, and
+   `hist_gradient_boosting` using validation MAE, with RMSE as the tie-breaker.
+4. Forecast the target day's 96 quarter-hour MCP values.
+5. Optimize the battery against the base forecast.
+6. Apply the storage feedback scenario to compress forecast spreads.
+7. Re-optimize against the storage-adjusted forecast and report price-taker versus
+   storage-aware economics.
+
+The dashboard endpoint returns the selected model registry, feature columns, leakage audit,
+base forecast, storage-adjusted forecast, dispatch schedules, value metrics, and assumptions.
+
+To export artifacts:
+
+```bash
+PYTHONPATH=src python3 scripts/train_forecast_registry.py --target-date 2026-04-22
+```
+
 ## Acceptance Criteria
 
 - Every source and candidate feature has a timing class.

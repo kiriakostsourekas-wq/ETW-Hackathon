@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+  font-family: Inter, system-ui, sans-serif;
+  background: #0f0f0f;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: #0f0f0f;
+  color: #ffffff;
+}
+
+.dashboard-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #2a2a2a;
+}
+
+.metric-card {
+  background: #1a1a1a;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #2a2a2a;
+}
+
+.chart-text {
+  fill: #888888;
+  font-size: 11px;
+}
+
+.battery-fill {
+  transition: height 900ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.flow-dot {
+  filter: drop-shadow(0 0 5px rgba(212, 247, 0, 0.95));
+}
+
+.flow-dot-a {
+  animation: flowA 2.2s linear infinite;
+}
+
+.flow-dot-b {
+  animation: flowB 2.5s linear infinite;
+}
+
+.flow-dot-c {
+  animation: flowC 2s linear infinite;
+}
+
+@keyframes flowA {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes flowB {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes flowC {
+  from {
+    offset-distance: 0%;
+  }
+  to {
+    offset-distance: 100%;
+  }
+}
+
+.dot-path-solar {
+  offset-path: path("M 56 36 C 104 36 112 62 145 62");
+}
+
+.dot-path-battery {
+  offset-path: path("M 50 90 C 99 90 111 62 145 62");
+}
+
+.dot-path-tower {
+  offset-path: path("M 145 62 C 185 92 214 92 246 92");
+}
+
+.miami-map {
+  background:
+    linear-gradient(35deg, transparent 0 44%, rgba(255, 255, 255, 0.12) 45% 47%, transparent 48%),
+    linear-gradient(160deg, transparent 0 55%, rgba(255, 255, 255, 0.11) 56% 58%, transparent 59%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(255, 255, 255, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 70% 55%, rgba(79, 195, 247, 0.16), transparent 26%),
+    #202020;
+  background-size: auto, auto, 24px 24px, 24px 24px, auto, auto;
+}
+
+.recharts-tooltip-cursor {
+  fill: rgba(212, 247, 0, 0.08);
+}
