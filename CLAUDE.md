@@ -13,7 +13,6 @@ The correct story is not "we have historical Greek BESS telemetry." We mostly do
 ```bash
 python3 -m pip install -r requirements.txt
 PYTHONPATH=src pytest -q
-streamlit run app.py
 ```
 
 Backtest a known public-data day:
@@ -24,7 +23,7 @@ python3 scripts/backtest_recent.py --start 2026-04-22 --end 2026-04-22
 
 ## Repo Map
 
-- `app.py`: Streamlit dashboard and demo flow.
+- `frontend/`: maintained React/Tailwind dashboard and demo flow.
 - `src/batteryhack/data_sources.py`: HEnEx, IPTO, Open-Meteo ingestion and normalization.
 - `src/batteryhack/optimizer.py`: battery MILP optimizer.
 - `src/batteryhack/forecasting.py`: transparent forecast proxy and ML hooks.
@@ -43,7 +42,7 @@ python3 scripts/backtest_recent.py --start 2026-04-22 --end 2026-04-22
 7. If adding a source, record it in `docs/research_sources.md` with retrieval notes and whether it is ex-ante usable.
 8. If changing optimizer behavior, add or update a test in `tests/`.
 9. If changing forecasting features, document leakage risk: what is known before DAM clearing vs only after clearing.
-10. If changing UI, verify the app still starts and the default demo date works.
+10. If changing UI, verify the React dashboard still starts and the default demo date works.
 
 ## Data Rules
 

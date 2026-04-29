@@ -6,10 +6,10 @@ This project implements a presentation-ready prototype for constraint-aware batt
 
 ```bash
 python3 -m pip install -r requirements.txt
-streamlit run app.py
+PYTHONPATH=src pytest -q
 ```
 
-The default demo date is `2026-04-22`, which has public HEnEx/IPTO files available. If a source is unavailable, the app fills missing columns with deterministic synthetic data so the live demo remains stable.
+The default demo date is `2026-04-22`, which has public HEnEx/IPTO files available. If a source is unavailable, the API fills missing columns with deterministic synthetic data so the live demo remains stable.
 
 ## React Dashboard
 
@@ -54,7 +54,6 @@ git clone https://github.com/kiriakostsourekas-wq/ETW-Hackathon.git
 cd ETW-Hackathon
 python3 -m pip install -r requirements.txt
 PYTHONPATH=src pytest -q
-streamlit run app.py
 ```
 
 Before starting work, read:
@@ -74,8 +73,7 @@ Generated data is intentionally ignored by git. Use the scripts below to recreat
 - `src/batteryhack/production_forecast.py`: leakage-safe forecast table builder, walk-forward model selection, model registry, price-taker dispatch, and realized/oracle value metrics.
 - `src/batteryhack/market_impact.py`: offline HEnEx aggregated-curve re-clearing experiment for testing national DAM MCP impact from one `330 MW / 790 MWh` BESS.
 - `src/batteryhack/api_server.py`: JSON API for the React dashboard, backed by HEnEx/IPTO/Open-Meteo ingestion and the MILP optimizer.
-- `app.py`: Streamlit dashboard with a submission story, METLEN price-taker dispatch, market-impact test instructions, sensitivity grid, and source traceability.
-- `frontend/`: React/Tailwind/Recharts dashboard that consumes the optimizer API.
+- `frontend/`: React/Tailwind/Recharts dashboard that consumes the optimizer API. This is the only maintained UI.
 - `docs/METLEN_BESS_submission_walkthrough.pptx`: six-slide editable teammate deck covering thesis, Greek problem, operational loop, data stack, simulator method, and caveats.
 - `tests/`: optimizer and data-contract tests.
 

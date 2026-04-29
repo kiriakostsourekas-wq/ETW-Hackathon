@@ -89,6 +89,5 @@ Caution:
   schedule.
 - `src/batteryhack/presets.py`: METLEN 330 MW / 790 MWh preset and sensitivity defaults.
 - `src/batteryhack/comparable_projects.py`: structured top-three comparable-project metadata.
-- `app.py`: interactive demo exposing asset assumptions, oracle/forecast scheduling, sensitivity
-  grid, research sources, and comparable-project analysis.
-
+- `frontend/`: interactive demo exposing asset assumptions, oracle/forecast scheduling, model
+  evidence, research sources, and comparable-project context.

@@ -44,13 +44,8 @@ VITE_API_BASE=https://your-api-host.example
 
 ## Structure
 
-- `src/App.jsx`: fixed viewport dashboard layout.
+- `src/App.jsx`: single maintained dashboard UI, including dashboard, optimization, battery health, and configuration views.
 - `src/api.js`: dashboard API client.
-- `src/components/TopNav.jsx`: top navigation bar.
-- `src/components/HeroStatus.jsx`: site greeting, animated power flow, and asset summary.
-- `src/components/KPIStrip.jsx`: API-backed KPI cards with sparklines.
-- `src/components/OperationsPanel.jsx`: API-backed public market and dispatch chart.
-- `src/components/ReportsPanel.jsx`: lightweight report view backed by the same optimizer payload.
 
 ## Backend Fields Used
 

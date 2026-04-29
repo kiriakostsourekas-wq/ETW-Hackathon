@@ -15,7 +15,7 @@
    - Deliver feasible schedules, profit/regret metrics, and sensitivity runs.
 
 4. UI/story
-   - Own `app.py`, dashboard polish, charts, business case, and presentation screenshots.
+   - Own `frontend/`, dashboard polish, charts, business case, and presentation screenshots.
    - Deliver a live demo path that works even if live data is temporarily unavailable.
 
 ## Handoff Contract

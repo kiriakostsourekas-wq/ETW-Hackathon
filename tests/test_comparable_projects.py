@@ -21,7 +21,7 @@ def test_comparable_project_metadata_has_actionable_mapping() -> None:
         assert project.caution
 
 
-def test_comparable_projects_table_is_streamlit_friendly() -> None:
+def test_comparable_projects_table_is_ui_friendly() -> None:
     rows = comparable_projects_table()
 
     assert len(rows) == 3
