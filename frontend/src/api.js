@@ -1,6 +1,18 @@
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
+const API_BASE =
+  import.meta.env.VITE_API_BASE ??
+  (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin);
+
+const DEMO_PAYLOAD_URL = "/demo-dashboard.json";
 
 export async function fetchDashboardData(params = {}) {
+  try {
+    return await fetchLiveDashboard(params);
+  } catch (error) {
+    return fetchStaticDemoPayload(error);
+  }
+}
+
+async function fetchLiveDashboard(params = {}) {
   const url = new URL("/api/dashboard", API_BASE);
   const query = {
     date: "2026-04-22",
@@ -26,6 +38,22 @@ export async function fetchDashboardData(params = {}) {
     throw new Error(payload.error ?? `API request failed with ${response.status}`);
   }
   return payload;
+}
+
+async function fetchStaticDemoPayload(cause) {
+  const response = await fetch(DEMO_PAYLOAD_URL, { cache: "no-store" });
+  if (!response.ok) {
+    throw cause instanceof Error ? cause : new Error("Dashboard API and demo payload unavailable");
+  }
+  const payload = await response.json();
+  return {
+    ...payload,
+    deployment_mode: "static-demo-fallback",
+    warnings: [
+      ...(payload.warnings ?? []),
+      "Using committed Vercel demo payload because the live optimizer API is unavailable.",
+    ],
+  };
 }
 
 export function formatEuro(value, digits = 0) {

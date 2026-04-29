@@ -31,6 +31,17 @@ cd frontend
 npm run build
 ```
 
+## Vercel
+
+The repo-level `vercel.json` builds this folder and serves `dist/`.
+
+When no live API is configured, Vercel serves `public/demo-dashboard.json` through `/api/dashboard`
+so the deployed dashboard remains functional. To use a hosted optimizer API instead, set:
+
+```text
+VITE_API_BASE=https://your-api-host.example
+```
+
 ## Structure
 
 - `src/App.jsx`: fixed viewport dashboard layout.
@@ -58,3 +69,4 @@ It renders:
 - `forecasting.metrics`: MAE/RMSE, capture metrics, price-taker value, storage-aware value, and spread compression.
 
 If `forecasting.available` is false, the UI stays usable and falls back to the direct DAM optimizer payload.
+If the live API request itself fails, the UI falls back to `/demo-dashboard.json`.

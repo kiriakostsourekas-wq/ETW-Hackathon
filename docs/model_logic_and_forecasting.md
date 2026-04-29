@@ -110,7 +110,83 @@ Current scenarios are assumption-based:
 
 The next calibration step is to parse HEnEx aggregated buy/sell curves and estimate interval-level price elasticity. Until that is implemented, storage impact is reported as scenario-based, not observed Greek market fact.
 
-## 5. API And Artifacts
+## 5. Technical Walkthrough Of The Four-Step Loop
+
+### Forecast 96 Quarter-Hour MCP Values
+
+`build_storage_aware_forecast()` builds one feature table from the selected history window through the target day. The target frame is exactly the target delivery day, so it should contain 96 rows. The training frame is every timestamp before the target day.
+
+The model-selection path is:
+
+```text
+load_market_history()
+compare_forecast_models_walk_forward()
+select_best_model()
+forecast_price_with_model()
+```
+
+The candidate models are `structural_proxy`, `interval_profile`, `ridge`, and `hist_gradient_boosting`. The selected model writes three target-day columns:
+
+- `forecast_price_eur_mwh`
+- `forecast_low_eur_mwh`
+- `forecast_high_eur_mwh`
+
+The leakage guard comes from `candidate_feature_columns()` and `assert_live_feature_columns()`: post-clearing columns such as `dam_price_eur_mwh`, actual SCADA, and curve slopes are labels/diagnostics, not live features.
+
+### Optimize Against The Base Forecast
+
+The first battery run is a price-taker schedule:
+
+```python
+optimize_battery_schedule(base_forecast_frame, battery_params, price_col="forecast_price_eur_mwh")
+```
+
+The optimizer sees the 96 forecast prices and chooses charge MW, discharge MW, and SoC for each interval. It maximizes forecast net revenue subject to power, energy, SoC, efficiency, terminal SoC, degradation, cycle-budget, and single-mode constraints.
+
+### Apply Storage Feedback
+
+The base schedule is then passed to:
+
+```python
+adjust_prices_for_storage_feedback(
+    base_forecast_frame,
+    base_schedule,
+    impact_params,
+    price_col="forecast_price_eur_mwh",
+    output_col="storage_adjusted_forecast_eur_mwh",
+)
+```
+
+The scenario layer estimates how fleet battery behavior changes the price shape:
+
+- charging intervals get positive price adjustments because fleet charging adds demand;
+- discharging intervals get negative price adjustments because fleet discharging adds supply;
+- an additional spread-compression factor pulls lows upward and highs downward.
+
+The current elasticities are explicit assumptions in `StorageImpactParams`. They are not claimed as calibrated Greek market facts yet.
+
+### Re-Optimize And Report Economics
+
+The second optimizer run uses the adjusted price column:
+
+```python
+optimize_battery_schedule(
+    storage_adjusted_frame,
+    battery_params,
+    price_col="storage_adjusted_forecast_eur_mwh",
+)
+```
+
+The output compares:
+
+- price-taker objective value on the base forecast;
+- storage-aware objective value after spread compression;
+- realized value of both schedules settled against published DAM prices when target-day actual MCP exists;
+- oracle value from optimizing directly on published DAM MCP;
+- capture ratio versus oracle;
+- storage impact metrics such as average spread compression and midday/evening adjustments.
+
+## 6. API And Artifacts
 
 The React dashboard uses:
 

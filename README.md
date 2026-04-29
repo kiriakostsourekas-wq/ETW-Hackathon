@@ -39,6 +39,14 @@ Useful API query controls:
 - `impact_scenario=Storage-aware medium impact` selects the storage feedback scenario.
 - `fleet_power_mw`, `fleet_energy_mwh`, `charge_price_elasticity_eur_mwh_per_gw`, `discharge_price_elasticity_eur_mwh_per_gw`, and `spread_compression_factor` override the scenario assumptions.
 
+## Vercel Deployment
+
+The repository is configured for Vercel with `vercel.json`. Vercel builds the React dashboard from `frontend/` and serves the static output from `frontend/dist`.
+
+For a reliable hackathon preview, `/api/dashboard` rewrites to a committed static payload at `frontend/public/demo-dashboard.json`. The frontend still supports the live Python API: set `VITE_API_BASE` in Vercel environment variables when the optimizer API is hosted externally.
+
+See `docs/vercel_deployment.md` for deployment details.
+
 ## Collaboration Setup
 
 Clone the shared repo:
@@ -138,6 +146,7 @@ Without `ENTSOE_SECURITY_TOKEN`, the script only verifies that the ENTSO-E API e
 See `docs/admie_market_data_catalog.md` for ADMIE/IPTO filetypes worth integrating later.
 See `docs/forecasting_signal_plan.md` for the ranked forecasting signal and leakage plan.
 See `docs/model_logic_and_forecasting.md` for the MILP optimizer, forecast pipeline, and battery regime-change explanation.
+See `docs/vercel_deployment.md` for the Vercel static dashboard deployment path.
 See `docs/comparable_project_analysis.md` for the top GitHub analogue repositories we used to benchmark the simulator design.
 See `docs/METLEN_BESS_submission_walkthrough.pptx` for the short teammate walkthrough deck.
 
