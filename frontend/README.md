@@ -4,6 +4,14 @@ React single-page dashboard built with Vite, Tailwind CSS, and Recharts.
 
 ## Run Locally
 
+From the repository root, run both the optimizer API and dashboard:
+
+```bash
+python3 run_dashboard.py
+```
+
+Or start each server manually.
+
 Start the Python API from the repository root:
 
 ```bash

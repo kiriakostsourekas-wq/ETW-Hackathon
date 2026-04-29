@@ -7,6 +7,7 @@ This project implements a presentation-ready prototype for constraint-aware batt
 ```bash
 python3 -m pip install -r requirements.txt
 PYTHONPATH=src pytest -q
+python3 run_dashboard.py
 ```
 
 The default demo date is `2026-04-22`, which has public HEnEx/IPTO files available. If a source is unavailable, the API fills missing columns with deterministic synthetic data so the live demo remains stable.
@@ -14,6 +15,14 @@ The default demo date is `2026-04-22`, which has public HEnEx/IPTO files availab
 ## React Dashboard
 
 The React dashboard is under `frontend/` and reads live JSON from the Python optimizer API.
+
+Run both the API and dashboard with one command:
+
+```bash
+python3 run_dashboard.py
+```
+
+The script prints the Vite URL to open. It starts the optimizer API on port `8000` unless one is already healthy, and starts the dashboard on port `5173` unless Vite needs to choose the next available port.
 
 Terminal 1:
 
