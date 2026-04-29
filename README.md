@@ -56,6 +56,19 @@ python3 scripts/backtest_recent.py --start 2026-04-22 --end 2026-04-22
 
 Backtest outputs are written to `data/processed/`.
 
+## Run The March ML Smoke Simulation
+
+```bash
+PYTHONPATH=src python3 scripts/march_smoke_simulation.py
+```
+
+The script loads March public market data, drops fallback-price days by default, compares live-safe
+forecast model families on `2026-03-15` through `2026-03-21`, selects the best ML family, and runs
+METLEN-scale dispatch from `2026-03-22` through `2026-03-31` settled against actual DAM prices.
+Outputs are written to `data/processed/march_smoke_model_performance.csv`,
+`data/processed/march_smoke_daily_model_performance.csv`, and
+`data/processed/march_smoke_dispatch.csv`.
+
 ## Sample HEnEx 15-Minute Prices
 
 ```bash

@@ -64,6 +64,12 @@ LIVE_FEATURE_TIMING = {
 LIVE_SAFE_TIMING = {"ex_ante", "planning"}
 MODEL_MIN_ROWS = 7 * 96
 NONLINEAR_MIN_ROWS = 14 * 96
+SUPPORTED_FORECAST_MODELS = (
+    "structural_proxy",
+    "interval_profile",
+    "ridge",
+    "hist_gradient_boosting",
+)
 
 
 def add_calendar_features(frame: pd.DataFrame) -> pd.DataFrame:
@@ -259,6 +265,69 @@ def forecast_price_with_uncertainty(history: pd.DataFrame, target: pd.DataFrame)
     return ForecastOutput(
         frame=frame,
         selected_model=selected_model,
+        feature_columns=columns,
+        diagnostics=diagnostics,
+    )
+
+
+def minimum_training_rows_for_model(model_name: str) -> int:
+    if model_name == "structural_proxy":
+        return 0
+    if model_name == "interval_profile":
+        return 1
+    if model_name == "ridge":
+        return MODEL_MIN_ROWS
+    if model_name == "hist_gradient_boosting":
+        return NONLINEAR_MIN_ROWS
+    raise ForecastingError(f"Unsupported forecast model: {model_name}")
+
+
+def forecast_price_with_model(
+    history: pd.DataFrame,
+    target: pd.DataFrame,
+    model_name: str,
+) -> ForecastOutput:
+    """Forecast target prices with a specific model family for backtests.
+
+    This keeps model-selection experiments explicit: the smoke test can compare Ridge and
+    HistGradientBoosting on the same walk-forward dates, while the Streamlit app can still use
+    the automatic fallback path in ``forecast_price_with_uncertainty``.
+    """
+    if model_name not in SUPPORTED_FORECAST_MODELS:
+        raise ForecastingError(f"Unsupported forecast model: {model_name}")
+
+    target_features = add_calendar_features(target)
+    columns = candidate_feature_columns(target_features)
+    train = _priced_history(history)
+    if len(train) < minimum_training_rows_for_model(model_name):
+        raise ForecastingError(
+            f"{model_name} needs at least {minimum_training_rows_for_model(model_name)} "
+            f"priced training rows; got {len(train)}"
+        )
+
+    if model_name == "structural_proxy":
+        forecast = structural_price_forecast(target)
+    elif model_name == "interval_profile":
+        forecast = price_shape_baseline_forecast(history, target)
+    elif model_name == "ridge":
+        forecast = fit_ridge_forecast(history, target)
+    else:
+        forecast = fit_nonlinear_challenger(history, target)
+
+    residual_width = _forecast_uncertainty_width(history, forecast)
+    frame = target.copy()
+    frame["forecast_price_eur_mwh"] = forecast.to_numpy(float)
+    frame["forecast_low_eur_mwh"] = (forecast - residual_width).clip(lower=-75).to_numpy(float)
+    frame["forecast_high_eur_mwh"] = (forecast + residual_width).to_numpy(float)
+    frame["forecast_model"] = model_name
+    diagnostics: dict[str, float | str] = {
+        "selected_model": model_name,
+        "uncertainty_width_eur_mwh": float(residual_width),
+        "training_rows": float(len(train)),
+    }
+    return ForecastOutput(
+        frame=frame,
+        selected_model=model_name,
         feature_columns=columns,
         diagnostics=diagnostics,
     )

@@ -43,8 +43,9 @@ The implemented mitigation is a storage-aware scenario layer:
 ## Model Stack
 
 - Baseline: structural proxy and interval price-shape profile.
-- Champion: Ridge model using live-safe ex-ante features.
-- Challenger: histogram gradient boosting once enough historical rows exist.
+- Champion for the March smoke run: histogram gradient boosting selected by validation MAE.
+- Ridge remains the linear challenger and interpretability fallback; in the March smoke run it had
+  slightly lower validation RMSE but higher MAE than histogram gradient boosting.
 - Uncertainty: residual scenario band from historical interval-profile errors.
 
 ## Acceptance Criteria

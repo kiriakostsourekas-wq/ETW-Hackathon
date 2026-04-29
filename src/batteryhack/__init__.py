@@ -11,5 +11,6 @@ __all__ = [
     "price_impact",
     "presets",
     "signal_catalog",
+    "simulation",
     "synthetic",
 ]
