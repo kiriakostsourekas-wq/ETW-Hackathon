@@ -48,23 +48,10 @@ def test_dashboard_payload_includes_forecast_contract(monkeypatch):
     forecast_frame["forecast_price_eur_mwh"] = forecast_frame["dam_price_eur_mwh"] * 0.98
     forecast_frame["forecast_low_eur_mwh"] = forecast_frame["forecast_price_eur_mwh"] - 10
     forecast_frame["forecast_high_eur_mwh"] = forecast_frame["forecast_price_eur_mwh"] + 10
-    adjusted_frame = forecast_frame.copy()
-    adjusted_frame["storage_adjusted_forecast_eur_mwh"] = (
-        adjusted_frame["forecast_price_eur_mwh"] * 0.97
-    )
-    adjusted_frame["storage_price_adjustment_eur_mwh"] = (
-        adjusted_frame["storage_adjusted_forecast_eur_mwh"]
-        - adjusted_frame["forecast_price_eur_mwh"]
-    )
     base_schedule = optimize_battery_schedule(
         forecast_frame,
         DEFAULT_ASSET,
         price_col="forecast_price_eur_mwh",
-    ).schedule
-    storage_schedule = optimize_battery_schedule(
-        adjusted_frame,
-        DEFAULT_ASSET,
-        price_col="storage_adjusted_forecast_eur_mwh",
     ).schedule
     quality = forecast_quality_metrics(
         market["dam_price_eur_mwh"],
@@ -87,10 +74,8 @@ def test_dashboard_payload_includes_forecast_contract(monkeypatch):
 
     fake_production = SimpleNamespace(
         registry=fake_registry,
-        base_forecast_frame=forecast_frame,
-        base_schedule=base_schedule,
-        storage_adjusted_frame=adjusted_frame,
-        storage_schedule=storage_schedule,
+        forecast_frame=forecast_frame,
+        schedule=base_schedule,
         model_performance=market.head(0),
         daily_model_performance=market.head(0),
         metrics={
@@ -99,17 +84,16 @@ def test_dashboard_payload_includes_forecast_contract(monkeypatch):
             "base_top_quartile_accuracy": quality["top_quartile_accuracy"],
             "base_bottom_quartile_accuracy": quality["bottom_quartile_accuracy"],
             "base_spread_direction_accuracy": quality["spread_direction_accuracy"],
-            "storage_aware_objective_net_revenue_eur": 1000.0,
-            "storage_aware_capture_ratio_vs_oracle": 0.8,
-            "impact_spread_compression_pct": 4.0,
-            "impact_average_spread_compression_eur_mwh": 5.5,
+            "price_taker_objective_net_revenue_eur": 1000.0,
+            "price_taker_realized_net_revenue_eur": 900.0,
+            "price_taker_capture_ratio_vs_oracle": 0.8,
         },
-        assumptions={"impact_scenario": "Storage-aware medium impact"},
+        assumptions={"market_impact_status": "offline experiment only"},
     )
 
     monkeypatch.setattr("batteryhack.api_server.load_market_bundle", fake_loader)
     monkeypatch.setattr(
-        "batteryhack.api_server.build_storage_aware_forecast",
+        "batteryhack.api_server.build_price_taker_forecast",
         lambda **_: fake_production,
     )
 
@@ -118,5 +102,7 @@ def test_dashboard_payload_includes_forecast_contract(monkeypatch):
     assert payload["forecasting"]["available"] is True
     assert payload["forecasting"]["registry"]["selected_model"] == "ridge"
     assert "forecast_price_eur_mwh" in payload["series"][0]
-    assert "storage_adjusted_forecast_eur_mwh" in payload["series"][0]
+    assert "storage_adjusted_forecast_eur_mwh" not in payload["series"][0]
+    assert "storage_charge_mw" not in payload["series"][0]
+    assert "price_taker_objective_net_revenue_eur" in payload["forecasting"]["metrics"]
     assert len(payload["kpis"]) == 4

@@ -95,9 +95,15 @@ def main() -> int:
     response = _get()
     _print_response("Reachability probe", response)
 
-    token = os.environ.get(args.token_env)
+    token = os.environ.get(args.token_env) or os.environ.get("ENTSOE_API_TOKEN")
     if not token:
-        print(f"Authenticated probe skipped: set {args.token_env} to your ENTSO-E security token.")
+        print(
+            "Authenticated probe skipped: set "
+            f"{args.token_env} or ENTSOE_API_TOKEN to your ENTSO-E security token."
+        )
+        return 0
+    if token.strip() == "your_token_here":
+        print("Authenticated probe skipped: token value is still the placeholder string.")
         return 0
 
     auth_response = _get({"securityToken": token})

@@ -4,22 +4,22 @@ export default {
   theme: {
     extend: {
       colors: {
-        dashboard: {
-          bg: "#0f0f0f",
-          nav: "#111111",
-          card: "#1a1a1a",
-          border: "#2a2a2a",
-          muted: "#888888",
-          accent: "#d4f700",
-          blue: "#4fc3f7",
-        },
-      },
-      fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
+        ink: "#202326",
+        muted: "#6d7280",
+        shell: "#f7f5f0",
+        card: "#fffdf8",
+        line: "#e7e1d7",
+        charge: "#2f9d66",
+        idle: "#b8bbc2",
+        discharge: "#df6b45",
+        price: "#365f93",
       },
       boxShadow: {
-        card: "0 0 0 1px #2a2a2a",
-        active: "0 0 0 1px #d4f700, 0 0 22px rgba(212, 247, 0, 0.12)",
+        soft: "0 18px 50px rgba(43, 39, 32, 0.08)",
+        card: "0 10px 30px rgba(43, 39, 32, 0.06)",
+      },
+      fontFamily: {
+        sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "Arial", "sans-serif"],
       },
     },
   },

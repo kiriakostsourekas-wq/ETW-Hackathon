@@ -22,12 +22,6 @@ from batteryhack.comparable_projects import TOP_COMPARABLE_PROJECTS, comparable_
 from batteryhack.data_sources import load_market_bundle
 from batteryhack.forecasting import forecast_price_with_uncertainty
 from batteryhack.optimizer import BatteryParams, optimize_battery_schedule
-from batteryhack.price_impact import (
-    FLEET_SCENARIOS,
-    PRICE_IMPACT_SCENARIOS,
-    StorageImpactParams,
-    optimize_with_storage_feedback,
-)
 from batteryhack.presets import (
     BATTERY_PRESETS,
     METLEN_BASE_EFFICIENCY,
@@ -161,148 +155,33 @@ def price_column_for_market_mode(market_mode: str) -> str:
     return "forecast_price_eur_mwh" if market_mode.startswith("Forecast") else "dam_price_eur_mwh"
 
 
-def optimize_storage_aware_case(
-    market: pd.DataFrame,
-    params: BatteryParams,
-    market_mode: str,
-    impact_params: StorageImpactParams,
-    iterations: int,
-) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float], str]:
-    _, base_metrics, base_status = optimize_for_mode(market, params, market_mode)
-    price_col = price_column_for_market_mode(market_mode)
-    simulation = optimize_with_storage_feedback(
-        market,
-        params,
-        impact_params,
-        price_col=price_col,
-        iterations=iterations,
-    )
-    schedule, metrics = settle_schedule_on_actual_prices(
-        simulation.schedule.drop(columns=["storage_adjusted_price_eur_mwh"], errors="ignore"),
-        simulation.adjusted_market,
-        params,
-        "storage_adjusted_price_eur_mwh",
-        settlement_price_col="storage_adjusted_price_eur_mwh",
-    )
-    revenue_haircut = base_metrics["net_revenue_eur"] - metrics["net_revenue_eur"]
-    metrics.update(simulation.impact_metrics)
-    metrics["price_taker_net_revenue_eur"] = base_metrics["net_revenue_eur"]
-    metrics["price_taker_gross_revenue_eur"] = base_metrics["gross_revenue_eur"]
-    metrics["revenue_haircut_eur"] = revenue_haircut
-    metrics["revenue_haircut_pct"] = (
-        revenue_haircut / base_metrics["net_revenue_eur"] * 100.0
-        if abs(base_metrics["net_revenue_eur"]) > 1e-9
-        else 0.0
-    )
-    metrics["baseline_discharged_mwh"] = base_metrics["discharged_mwh"]
-    metrics["baseline_captured_spread_eur_mwh"] = base_metrics["captured_spread_eur_mwh"]
-    status = f"{simulation.status}; feedback iterations {simulation.iterations_run}; base {base_status}"
-    return schedule, simulation.adjusted_market, metrics, status
-
-
 def optimize_selected_case(
     market: pd.DataFrame,
     params: BatteryParams,
     market_mode: str,
-    price_impact_mode: str,
-    impact_params: StorageImpactParams | None,
+    dispatch_assumption: str,
+    impact_params: object | None,
     impact_iterations: int,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, float], str]:
-    if price_impact_mode == "Price-taker" or impact_params is None:
-        schedule, metrics, status = optimize_for_mode(market, params, market_mode)
-        metrics.update(
-            {
-                "price_taker_net_revenue_eur": metrics["net_revenue_eur"],
-                "price_taker_gross_revenue_eur": metrics["gross_revenue_eur"],
-                "revenue_haircut_eur": 0.0,
-                "revenue_haircut_pct": 0.0,
-                "average_spread_compression_eur_mwh": 0.0,
-                "spread_compression_pct": 0.0,
-                "midday_price_uplift_eur_mwh": 0.0,
-                "evening_peak_suppression_eur_mwh": 0.0,
-                "fleet_power_mw": 0.0,
-                "fleet_energy_mwh": 0.0,
-            }
-        )
-        return schedule, market, metrics, status
-    return optimize_storage_aware_case(
-        market,
-        params,
-        market_mode,
-        impact_params,
-        impact_iterations,
-    )
-
-
-def build_regime_shift_frame(
-    market: pd.DataFrame,
-    params: BatteryParams,
-    market_mode: str,
-    fleet_power_mw: float,
-    fleet_energy_mwh: float,
-    impact_iterations: int,
-) -> pd.DataFrame:
-    rows: list[dict[str, float | str]] = []
-    _, _, baseline_metrics, _ = optimize_selected_case(
-        market,
-        params,
-        market_mode,
-        "Price-taker",
-        None,
-        1,
-    )
-    rows.append(
+    _ = (dispatch_assumption, impact_params, impact_iterations)
+    schedule, metrics, status = optimize_for_mode(market, params, market_mode)
+    metrics.update(
         {
-            "scenario": "Price-taker baseline",
-            "fleet_mw": 0.0,
-            "net_revenue_eur": baseline_metrics["net_revenue_eur"],
+            "price_taker_net_revenue_eur": metrics["net_revenue_eur"],
+            "price_taker_gross_revenue_eur": metrics["gross_revenue_eur"],
             "revenue_haircut_eur": 0.0,
             "revenue_haircut_pct": 0.0,
-            "spread_compression_eur_mwh": 0.0,
-            "midday_uplift_eur_mwh": 0.0,
-            "evening_suppression_eur_mwh": 0.0,
-            "captured_spread_eur_mwh": baseline_metrics["captured_spread_eur_mwh"],
-            "discharged_mwh": baseline_metrics["discharged_mwh"],
         }
     )
-    for scenario_name, scenario_params in PRICE_IMPACT_SCENARIOS.items():
-        case_impact = replace(
-            scenario_params,
-            fleet_power_mw=fleet_power_mw,
-            fleet_energy_mwh=fleet_energy_mwh,
-            reference_power_mw=params.power_mw,
-        )
-        _, _, case_metrics, _ = optimize_selected_case(
-            market,
-            params,
-            market_mode,
-            scenario_name,
-            case_impact,
-            impact_iterations,
-        )
-        rows.append(
-            {
-                "scenario": scenario_name,
-                "fleet_mw": fleet_power_mw,
-                "net_revenue_eur": case_metrics["net_revenue_eur"],
-                "revenue_haircut_eur": case_metrics["revenue_haircut_eur"],
-                "revenue_haircut_pct": case_metrics["revenue_haircut_pct"],
-                "spread_compression_eur_mwh": case_metrics["average_spread_compression_eur_mwh"],
-                "midday_uplift_eur_mwh": case_metrics["midday_price_uplift_eur_mwh"],
-                "evening_suppression_eur_mwh": case_metrics["evening_peak_suppression_eur_mwh"],
-                "captured_spread_eur_mwh": case_metrics["captured_spread_eur_mwh"],
-                "discharged_mwh": case_metrics["discharged_mwh"],
-            }
-        )
-    return pd.DataFrame(rows)
+    return schedule, market, metrics, status
 
 
 def build_sensitivity_frame(
     market: pd.DataFrame,
     base_params: BatteryParams,
     market_mode: str,
-    price_impact_mode: str,
-    impact_params: StorageImpactParams | None,
+    dispatch_assumption: str,
+    impact_params: object | None,
     impact_iterations: int,
 ) -> pd.DataFrame:
     rows: list[dict[str, float | str]] = []
@@ -320,13 +199,13 @@ def build_sensitivity_frame(
                         market,
                         case_params,
                         market_mode,
-                        price_impact_mode,
+                        dispatch_assumption,
                         impact_params,
                         impact_iterations,
                     )
                     rows.append(
                         {
-                            "price_impact_mode": price_impact_mode,
+                            "dispatch_assumption": "Price-taker",
                             "efficiency_pct": efficiency * 100,
                             "cycle_limit": cycle_limit,
                             "degradation_eur_mwh": degradation,
@@ -335,9 +214,6 @@ def build_sensitivity_frame(
                             ],
                             "net_revenue_eur": case_metrics["net_revenue_eur"],
                             "revenue_haircut_eur": case_metrics["revenue_haircut_eur"],
-                            "spread_compression_eur_mwh": case_metrics[
-                                "average_spread_compression_eur_mwh"
-                            ],
                             "gross_revenue_eur": case_metrics["gross_revenue_eur"],
                             "degradation_cost_eur": case_metrics["degradation_cost_eur"],
                             "discharged_mwh": case_metrics["discharged_mwh"],
@@ -349,14 +225,13 @@ def build_sensitivity_frame(
                 except Exception as exc:  # noqa: BLE001
                     rows.append(
                         {
-                            "price_impact_mode": price_impact_mode,
+                            "dispatch_assumption": "Price-taker",
                             "efficiency_pct": efficiency * 100,
                             "cycle_limit": cycle_limit,
                             "degradation_eur_mwh": degradation,
                             "price_taker_net_revenue_eur": 0.0,
                             "net_revenue_eur": 0.0,
                             "revenue_haircut_eur": 0.0,
-                            "spread_compression_eur_mwh": 0.0,
                             "gross_revenue_eur": 0.0,
                             "degradation_cost_eur": 0.0,
                             "discharged_mwh": 0.0,
@@ -424,18 +299,6 @@ def build_dispatch_chart(frame: pd.DataFrame, schedule: pd.DataFrame) -> go.Figu
         ),
         secondary_y=False,
     )
-    if "storage_adjusted_price_eur_mwh" in frame.columns:
-        fig.add_trace(
-            go.Scatter(
-                x=frame["timestamp"],
-                y=frame["storage_adjusted_price_eur_mwh"],
-                name="Storage-aware price",
-                mode="lines",
-                line=dict(color="#dc2626", width=2.2, dash="dash"),
-                hovertemplate="%{x|%H:%M}<br>%{y:.2f} EUR/MWh<extra></extra>",
-            ),
-            secondary_y=False,
-        )
     if {"forecast_low_eur_mwh", "forecast_high_eur_mwh"}.issubset(frame.columns):
         fig.add_trace(
             go.Scatter(
@@ -668,50 +531,8 @@ with st.sidebar:
             "against the transparent forecast, then settles the result against actual DAM prices."
         ),
     )
-    price_impact_mode = st.selectbox(
-        "Price feedback",
-        ["Price-taker", *PRICE_IMPACT_SCENARIOS.keys()],
-        help=(
-            "Price-taker is the pre-feedback value. Storage-aware modes add a counterfactual "
-            "price impact layer where fleet charging lifts low-price intervals and discharging "
-            "suppresses high-price intervals."
-        ),
-    )
-    if price_impact_mode == "Price-taker":
-        fleet_power_mw = 0.0
-        fleet_energy_mwh = 0.0
-        impact_iterations = 1
-    else:
-        fleet_choice = st.selectbox(
-            "Battery fleet scenario",
-            [*FLEET_SCENARIOS.keys(), "Custom fleet"],
-            help="Assumed storage fleet participating with similar arbitrage behavior.",
-        )
-        default_fleet_power, default_fleet_energy = FLEET_SCENARIOS.get(
-            fleet_choice,
-            (power_mw, capacity_mwh),
-        )
-        fleet_power_mw = st.number_input(
-            "Participating fleet MW",
-            min_value=0.0,
-            max_value=5000.0,
-            value=float(default_fleet_power),
-            step=10.0,
-        )
-        fleet_energy_mwh = st.number_input(
-            "Participating fleet MWh",
-            min_value=0.0,
-            max_value=15000.0,
-            value=float(default_fleet_energy),
-            step=50.0,
-        )
-        impact_iterations = st.slider(
-            "Price-feedback iterations",
-            1,
-            3,
-            2,
-            help="Re-optimize after one or more counterfactual price adjustments.",
-        )
+    dispatch_assumption = "Price-taker"
+    impact_iterations = 1
     run_sensitivity = st.checkbox(
         "Run METLEN sensitivity grid",
         value=preset == METLEN_PRESET_NAME,
@@ -730,13 +551,6 @@ params = BatteryParams(
 )
 
 impact_params = None
-if price_impact_mode != "Price-taker":
-    impact_params = replace(
-        PRICE_IMPACT_SCENARIOS[price_impact_mode],
-        fleet_power_mw=fleet_power_mw,
-        fleet_energy_mwh=fleet_energy_mwh,
-        reference_power_mw=params.power_mw,
-    )
 
 st.title("Greek Day-Ahead Battery Optimizer")
 st.caption(
@@ -763,7 +577,7 @@ try:
         market,
         params,
         market_mode,
-        price_impact_mode,
+        dispatch_assumption,
         impact_params,
         impact_iterations,
     )
@@ -793,30 +607,6 @@ metric_cols[3].metric("Discharged", format_mwh(metrics["discharged_mwh"]))
 metric_cols[4].metric("Cycles", f"{metrics['equivalent_cycles']:.2f}")
 metric_cols[5].metric("Spread captured", f"{metrics['captured_spread_eur_mwh']:.1f} EUR/MWh")
 
-if price_impact_mode != "Price-taker":
-    st.caption(
-        "Storage-aware mode is counterfactual scenario analysis: it estimates how fleet-scale "
-        "battery bids could compress spreads, not a factual Greek post-launch price forecast."
-    )
-    impact_cols = st.columns(5)
-    impact_cols[0].metric(
-        "Pre-feedback net",
-        format_eur(metrics["price_taker_net_revenue_eur"]),
-    )
-    impact_cols[1].metric("Revenue haircut", format_eur(metrics["revenue_haircut_eur"]))
-    impact_cols[2].metric(
-        "Spread compression",
-        f"{metrics['average_spread_compression_eur_mwh']:.1f} EUR/MWh",
-    )
-    impact_cols[3].metric(
-        "Midday uplift",
-        f"{metrics['midday_price_uplift_eur_mwh']:.1f} EUR/MWh",
-    )
-    impact_cols[4].metric(
-        "Evening suppression",
-        f"{metrics['evening_peak_suppression_eur_mwh']:.1f} EUR/MWh",
-    )
-
 asset_cols = st.columns(4)
 asset_cols[0].metric("Power", format_mw(params.power_mw))
 asset_cols[1].metric("Nameplate energy", format_mwh(params.capacity_mwh))
@@ -826,8 +616,8 @@ asset_cols[3].metric(
     format_mwh(params.capacity_mwh * (params.max_soc_pct - params.min_soc_pct) / 100.0),
 )
 
-tab_story, tab_dispatch, tab_regime, tab_sensitivity, tab_trace = st.tabs(
-    ["Story", "Dispatch", "Regime Shift", "Sensitivity", "Data Trace"]
+tab_story, tab_dispatch, tab_market_impact, tab_sensitivity, tab_trace = st.tabs(
+    ["Story", "Dispatch", "Market Impact Test", "Sensitivity", "Data Trace"]
 )
 
 with tab_story:
@@ -898,9 +688,9 @@ with tab_story:
         "No limit" if params.max_cycles_per_day is None else f"{params.max_cycles_per_day:.1f}/day",
     )
     st.info(
-        "Regime-shift caveat: once batteries enter the Greek DAM at scale, they become new "
-        "demand in low-price intervals and new supply in high-price intervals. Historical prices "
-        "are therefore pre-feedback labels, not stable post-launch truth."
+        "Market-impact caveat: this dashboard assumes one METLEN-scale BESS is a price-taker. "
+        "The separate HEnEx aggregated-curve experiment tests whether that assumption is "
+        "defensible before adding any price-maker logic."
     )
 
 with tab_dispatch:
@@ -925,59 +715,33 @@ with tab_dispatch:
             )
         st.metric("Uplift vs threshold heuristic", format_eur(uplift))
 
-with tab_regime:
-    st.subheader("Price-Taker Value vs Storage-Aware Regime Shift")
+with tab_market_impact:
+    st.subheader("Price-Taker Assumption Test")
     st.write(
-        "The baseline keeps the current DAM price path fixed. Storage-aware scenarios ask what "
-        "happens if participating batteries lift low-price charging intervals, suppress high-price "
-        "discharge intervals, and compress daily spreads."
+        "The operating dashboard now optimizes the METLEN-scale BESS once against the selected "
+        "MCP signal. Market impact is handled as an offline hypothesis test, not as a second "
+        "dispatch loop."
     )
-    comparison_fleet_power = fleet_power_mw
-    comparison_fleet_energy = fleet_energy_mwh
-    if price_impact_mode == "Price-taker":
-        comparison_fleet_power, comparison_fleet_energy = FLEET_SCENARIOS[
-            "First Greek standalone fleet"
-        ]
-    with st.spinner("Running regime-shift comparison..."):
-        regime_shift = build_regime_shift_frame(
-            market,
-            params,
-            market_mode,
-            comparison_fleet_power,
-            comparison_fleet_energy,
-            max(2, impact_iterations),
-        )
-    regime_cols = st.columns(4)
-    medium = regime_shift[regime_shift["scenario"] == "Storage-aware medium impact"].iloc[0]
-    baseline = regime_shift[regime_shift["scenario"] == "Price-taker baseline"].iloc[0]
-    regime_cols[0].metric("Baseline net", format_eur(float(baseline["net_revenue_eur"])))
-    regime_cols[1].metric("Medium-impact net", format_eur(float(medium["net_revenue_eur"])))
-    regime_cols[2].metric("Revenue haircut", format_eur(float(medium["revenue_haircut_eur"])))
-    regime_cols[3].metric(
-        "Spread compression",
-        f"{float(medium['spread_compression_eur_mwh']):.1f} EUR/MWh",
+    test_cols = st.columns(4)
+    test_cols[0].metric("Tested asset", "330 MW / 790 MWh")
+    test_cols[1].metric("Median shift pass", "< 0.5 EUR/MWh")
+    test_cols[2].metric("Revenue haircut pass", "< 2%")
+    test_cols[3].metric("Valid coverage", ">= 80%")
+    st.code(
+        "PYTHONPATH=src python3 scripts/run_market_impact_experiment.py "
+        "--start-date 2026-04-22 --curve-dir data/raw",
+        language="bash",
     )
-    st.dataframe(
-        regime_shift.round(
-            {
-                "fleet_mw": 0,
-                "net_revenue_eur": 0,
-                "revenue_haircut_eur": 0,
-                "revenue_haircut_pct": 1,
-                "spread_compression_eur_mwh": 1,
-                "midday_uplift_eur_mwh": 1,
-                "evening_suppression_eur_mwh": 1,
-                "captured_spread_eur_mwh": 1,
-                "discharged_mwh": 1,
-            }
-        ),
-        hide_index=True,
-        use_container_width=True,
+    st.write(
+        "The experiment parses HEnEx `EL-DAM_AggrCurves_EN` files, re-clears each active "
+        "15-minute interval after adding charge as extra buy demand or discharge as extra sell "
+        "supply, and writes interval plus daily CSV summaries under `data/processed/`."
     )
-    st.caption(
-        f"Comparison fleet: {comparison_fleet_power:,.0f} MW / "
-        f"{comparison_fleet_energy:,.0f} MWh. AEMO is used only as operational evidence "
-        "that renewables plus storage can pressure wholesale prices, not as a Greek market analogue."
+    st.write(
+        "If the result passes both thresholds, one METLEN-scale BESS is treated as negligible "
+        "for national DAM MCP. If the median passes but p95 shift is high, the result is flagged "
+        "as locally material. If fewer than 80% of active intervals validate, the result is "
+        "inconclusive."
     )
 
 with tab_sensitivity:
@@ -985,8 +749,8 @@ with tab_sensitivity:
     st.write(
         "This grid keeps the selected power and energy fixed, using 330 MW / 790 MWh for "
         "the METLEN preset, and varies the uncertain parameters from the project brief: "
-        "efficiency, cycle budget, and degradation cost. If a storage-aware price-feedback "
-        "mode is selected, each case is re-run under that counterfactual regime-shift scenario."
+        "efficiency, cycle budget, and degradation cost. Each case is a price-taker dispatch; "
+        "market impact is tested separately with HEnEx aggregated curves."
     )
     if run_sensitivity:
         with st.spinner("Running sensitivity cases..."):
@@ -994,7 +758,7 @@ with tab_sensitivity:
                 market,
                 params,
                 market_mode,
-                price_impact_mode,
+                dispatch_assumption,
                 impact_params,
                 impact_iterations,
             )
@@ -1017,7 +781,6 @@ with tab_sensitivity:
                     "price_taker_net_revenue_eur": 0,
                     "net_revenue_eur": 0,
                     "revenue_haircut_eur": 0,
-                    "spread_compression_eur_mwh": 1,
                     "gross_revenue_eur": 0,
                     "degradation_cost_eur": 0,
                     "discharged_mwh": 1,
@@ -1054,9 +817,6 @@ with tab_trace:
         "cloud_cover",
         "wind_speed_10m",
     ]
-    if "storage_adjusted_price_eur_mwh" in scenario_market.columns:
-        signal_columns.insert(2, "storage_adjusted_price_eur_mwh")
-        signal_columns.insert(3, "storage_price_adjustment_eur_mwh")
     st.dataframe(
         scenario_market[signal_columns].assign(
             timestamp=scenario_market["timestamp"].dt.strftime("%H:%M")
@@ -1083,26 +843,23 @@ with tab_trace:
         "not treated as fixed public facts. They are exposed as assumptions because they can "
         "materially change dispatch and revenue."
     )
-    st.subheader("Regime Shift Risk")
+    st.subheader("Market Impact Hypothesis")
     st.write(
-        "Historical Greek DAM prices are unstable labels for post-launch storage behavior. Once "
-        "standalone BESS capacity participates at scale, batteries become new demand in low-price "
-        "solar or high-RES intervals and new supply in high-price evening intervals. That feedback "
-        "can lift trough prices, suppress peaks, compress spreads, and reduce the arbitrage value "
-        "estimated by a pure price-taker model."
+        "The production path first assumes one METLEN-scale BESS is a price-taker. That is a "
+        "testable hypothesis, not a claim. Charging adds buy demand and discharging adds sell "
+        "supply, so the right public test is HEnEx aggregated curve depth near each clearing price."
     )
     st.write(
-        "The storage-aware modes implement this as scenario analysis. The preferred Greek-specific "
-        "next step is parsing HEnEx aggregated buy/sell curves to estimate local price elasticity "
-        "around each 15-minute clearing price. Until that is reliable, the app uses low, medium, "
-        "and high literature-calibrated elasticities, plus an explicit participating-fleet slider."
+        "The offline experiment re-clears each active 15-minute interval with the same dispatch "
+        "schedule. It calls the BESS negligible only if median absolute MCP shift is below "
+        "0.5 EUR/MWh and the revenue haircut is below 2%, with at least 80% valid interval coverage."
     )
     st.write(
         "Useful evidence base: CAISO shows large batteries charging in solar hours and discharging "
-        "late afternoon/evening; NREL warns price-taker storage models can overestimate value; "
-        "Spain and California studies report spread compression as storage penetration grows. "
-        "AEMO is treated only as non-European operational evidence that renewables plus storage "
-        "can pressure wholesale prices."
+        "late afternoon/evening; NREL warns price-taker storage models can overestimate value "
+        "when storage becomes price-making; Spain and California studies report spread compression "
+        "as storage penetration grows. Those are framing references, while the Greek decision "
+        "should come from HEnEx curve re-clearing."
     )
     st.subheader("Analogue Classification")
     analogue_classes = pd.DataFrame(
@@ -1119,7 +876,7 @@ with tab_trace:
             },
             {
                 "class": "Operational regime-shift evidence",
-                "sources": "AEMO Q4 2025, California/Spain spread-compression studies",
+                "sources": "AEMO Q4 2025, California/Spain storage price-impact studies",
                 "how used": "Evidence that renewable/storage growth can suppress prices and compress spreads.",
             },
         ]
@@ -1149,8 +906,8 @@ with tab_trace:
             st.write("Caution: " + project.caution)
     st.subheader("Model Boundaries")
     st.write(
-        "The default model remains price-taker DAM arbitrage. Storage-aware mode is a "
-        "counterfactual sensitivity layer, not a market-clearing engine. The app still does not "
+        "The default model remains price-taker DAM arbitrage. Market impact is an offline "
+        "HEnEx curve experiment, not a second optimization loop. The app still does not "
         "model balancing-market revenue, ancillary services, network constraints, tax effects, "
         "or vendor-specific thermal derating."
     )
@@ -1220,11 +977,7 @@ with tab_trace:
     for name, source in sources.items():
         st.write(f"**{name}:** {source}")
     st.write(f"**Scheduling mode:** {market_mode}")
-    st.write(f"**Price feedback:** {price_impact_mode}")
-    if price_impact_mode != "Price-taker":
-        st.write(
-            f"**Participating fleet:** {fleet_power_mw:,.0f} MW / {fleet_energy_mwh:,.0f} MWh"
-        )
+    st.write("**Market impact:** offline HEnEx curve experiment only")
     st.write(f"**Optimizer status:** {optimization_status}")
     st.subheader("Dispatch table")
     display = schedule.merge(

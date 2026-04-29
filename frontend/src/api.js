@@ -3,6 +3,7 @@ const API_BASE =
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin);
 
 const DEMO_PAYLOAD_URL = "/demo-dashboard.json";
+const LIVE_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30000);
 
 export async function fetchDashboardData(params = {}) {
   try {
@@ -14,6 +15,8 @@ export async function fetchDashboardData(params = {}) {
 
 async function fetchLiveDashboard(params = {}) {
   const url = new URL("/api/dashboard", API_BASE);
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), LIVE_API_TIMEOUT_MS);
   const query = {
     date: "2026-04-22",
     power_mw: 330,
@@ -32,12 +35,21 @@ async function fetchLiveDashboard(params = {}) {
     }
   });
 
-  const response = await fetch(url);
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error ?? `API request failed with ${response.status}`);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.error ?? `API request failed with ${response.status}`);
+    }
+    return payload;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(`Dashboard API timed out after ${LIVE_API_TIMEOUT_MS}ms`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return payload;
 }
 
 async function fetchStaticDemoPayload(cause) {

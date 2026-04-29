@@ -16,11 +16,6 @@ from .forecasting import (
     minimum_training_rows_for_model,
 )
 from .optimizer import BatteryParams, optimize_battery_schedule
-from .price_impact import (
-    PRICE_IMPACT_SCENARIOS,
-    StorageImpactParams,
-    adjust_prices_for_storage_feedback,
-)
 from .simulation import (
     DEFAULT_MODEL_CANDIDATES,
     compare_forecast_models_walk_forward,
@@ -47,14 +42,12 @@ class ForecastModelRegistry:
 
 
 @dataclass(frozen=True)
-class StorageAwareForecast:
+class PriceTakerForecast:
     registry: ForecastModelRegistry
     feature_table: pd.DataFrame
     target_frame: pd.DataFrame
-    base_forecast_frame: pd.DataFrame
-    base_schedule: pd.DataFrame
-    storage_adjusted_frame: pd.DataFrame
-    storage_schedule: pd.DataFrame
+    forecast_frame: pd.DataFrame
+    schedule: pd.DataFrame
     model_performance: pd.DataFrame
     daily_model_performance: pd.DataFrame
     metrics: dict[str, float | str | None]
@@ -72,19 +65,16 @@ def build_forecast_feature_table(
     return frame, history.source_summary, history.warnings
 
 
-def build_storage_aware_forecast(
+def build_price_taker_forecast(
     target_date: date,
     battery_params: BatteryParams,
     history_start: date | None = None,
     validation_days: int = 3,
     model_candidates: tuple[str, ...] = DEFAULT_MODEL_CANDIDATES,
-    impact_params: StorageImpactParams | None = None,
     allow_synthetic: bool = True,
-) -> StorageAwareForecast:
+) -> PriceTakerForecast:
     if history_start is None:
         history_start = target_date - timedelta(days=21)
-    if impact_params is None:
-        impact_params = PRICE_IMPACT_SCENARIOS["Storage-aware medium impact"]
 
     feature_table, source_summary, warnings = build_forecast_feature_table(
         history_start,
@@ -118,33 +108,19 @@ def build_storage_aware_forecast(
         feature_columns=forecast.feature_columns,
     )
 
-    base_forecast_frame = forecast.frame.copy()
-    base_schedule = optimize_battery_schedule(
-        base_forecast_frame,
+    forecast_frame = forecast.frame.copy()
+    dispatch = optimize_battery_schedule(
+        forecast_frame,
         battery_params,
         price_col="forecast_price_eur_mwh",
-    ).schedule
-    impact = adjust_prices_for_storage_feedback(
-        base_forecast_frame,
-        base_schedule,
-        impact_params,
-        price_col="forecast_price_eur_mwh",
-        output_col="storage_adjusted_forecast_eur_mwh",
-    )
-    storage_schedule_output = optimize_battery_schedule(
-        impact.frame,
-        battery_params,
-        price_col="storage_adjusted_forecast_eur_mwh",
     )
 
-    metrics = _storage_forecast_metrics(
+    metrics = _price_taker_forecast_metrics(
         target_frame=target_frame,
-        base_forecast_frame=base_forecast_frame,
-        base_schedule=base_schedule,
-        storage_adjusted_frame=impact.frame,
-        storage_schedule=storage_schedule_output.schedule,
+        forecast_frame=forecast_frame,
+        schedule=dispatch.schedule,
+        objective_metrics=dispatch.metrics,
         battery_params=battery_params,
-        impact_metrics=impact.metrics,
     )
     assumptions = {
         "target": "15-minute HEnEx Day-Ahead Market MCP",
@@ -152,22 +128,19 @@ def build_storage_aware_forecast(
         "history_end": target_date.isoformat(),
         "validation_days": validation_days,
         "model_candidates": list(model_candidates),
-        "impact_scenario": impact_params.scenario_name,
-        "storage_impact": asdict(impact_params),
         "battery": asdict(battery_params),
-        "storage_impact_status": (
-            "scenario-based until HEnEx aggregated curve elasticity is calibrated"
+        "market_impact_status": (
+            "not applied in production dispatch; use the market-impact experiment "
+            "to test whether price-taker operation is defensible"
         ),
     }
 
-    return StorageAwareForecast(
+    return PriceTakerForecast(
         registry=registry,
         feature_table=feature_table,
         target_frame=target_frame,
-        base_forecast_frame=base_forecast_frame,
-        base_schedule=base_schedule,
-        storage_adjusted_frame=impact.frame,
-        storage_schedule=storage_schedule_output.schedule,
+        forecast_frame=forecast_frame,
+        schedule=dispatch.schedule,
         model_performance=model_performance,
         daily_model_performance=daily_performance,
         metrics=metrics,
@@ -295,62 +268,36 @@ def _build_registry(
     )
 
 
-def _storage_forecast_metrics(
+def _price_taker_forecast_metrics(
     target_frame: pd.DataFrame,
-    base_forecast_frame: pd.DataFrame,
-    base_schedule: pd.DataFrame,
-    storage_adjusted_frame: pd.DataFrame,
-    storage_schedule: pd.DataFrame,
+    forecast_frame: pd.DataFrame,
+    schedule: pd.DataFrame,
+    objective_metrics: dict[str, float],
     battery_params: BatteryParams,
-    impact_metrics: dict[str, float],
 ) -> dict[str, float | str | None]:
-    base_forecast_quality = forecast_quality_metrics(
+    forecast_quality = forecast_quality_metrics(
         target_frame["dam_price_eur_mwh"],
-        base_forecast_frame["forecast_price_eur_mwh"],
+        forecast_frame["forecast_price_eur_mwh"],
     )
-    adjusted_forecast_quality = forecast_quality_metrics(
-        target_frame["dam_price_eur_mwh"],
-        storage_adjusted_frame["storage_adjusted_forecast_eur_mwh"],
-    )
-    base_objective = optimize_battery_schedule(
-        base_forecast_frame,
-        battery_params,
-        price_col="forecast_price_eur_mwh",
-    ).metrics
-    storage_objective = optimize_battery_schedule(
-        storage_adjusted_frame,
-        battery_params,
-        price_col="storage_adjusted_forecast_eur_mwh",
-    ).metrics
-    base_realized = settle_schedule_on_actual_prices(base_schedule, target_frame, battery_params)
-    storage_realized = settle_schedule_on_actual_prices(storage_schedule, target_frame, battery_params)
-    oracle = optimize_battery_schedule(target_frame, battery_params, price_col="dam_price_eur_mwh").metrics
-    oracle_net = oracle["net_revenue_eur"]
+    realized = settle_schedule_on_actual_prices(schedule, target_frame, battery_params)
 
     return {
-        "base_forecast_mae_eur_mwh": base_forecast_quality["mae_eur_mwh"],
-        "base_forecast_rmse_eur_mwh": base_forecast_quality["rmse_eur_mwh"],
-        "base_top_quartile_accuracy": base_forecast_quality["top_quartile_accuracy"],
-        "base_bottom_quartile_accuracy": base_forecast_quality["bottom_quartile_accuracy"],
-        "base_spread_direction_accuracy": base_forecast_quality[
-            "spread_direction_accuracy"
+        "base_forecast_mae_eur_mwh": forecast_quality["mae_eur_mwh"],
+        "base_forecast_rmse_eur_mwh": forecast_quality["rmse_eur_mwh"],
+        "base_top_quartile_accuracy": forecast_quality["top_quartile_accuracy"],
+        "base_bottom_quartile_accuracy": forecast_quality["bottom_quartile_accuracy"],
+        "base_spread_direction_accuracy": forecast_quality["spread_direction_accuracy"],
+        "price_taker_objective_net_revenue_eur": objective_metrics["net_revenue_eur"],
+        "price_taker_objective_charged_mwh": objective_metrics["charged_mwh"],
+        "price_taker_objective_discharged_mwh": objective_metrics["discharged_mwh"],
+        "price_taker_objective_equivalent_cycles": objective_metrics["equivalent_cycles"],
+        "price_taker_objective_captured_spread_eur_mwh": objective_metrics[
+            "captured_spread_eur_mwh"
         ],
-        "adjusted_forecast_mae_eur_mwh": adjusted_forecast_quality["mae_eur_mwh"],
-        "price_taker_objective_net_revenue_eur": base_objective["net_revenue_eur"],
-        "storage_aware_objective_net_revenue_eur": storage_objective["net_revenue_eur"],
-        "price_taker_realized_net_revenue_eur": base_realized["net_revenue_eur"],
-        "storage_aware_realized_net_revenue_eur": storage_realized["net_revenue_eur"],
-        "oracle_net_revenue_eur": oracle_net,
-        "price_taker_capture_ratio_vs_oracle": (
-            base_realized["net_revenue_eur"] / oracle_net if abs(oracle_net) > 1e-9 else None
-        ),
-        "storage_aware_capture_ratio_vs_oracle": (
-            storage_realized["net_revenue_eur"] / oracle_net if abs(oracle_net) > 1e-9 else None
-        ),
-        "storage_aware_revenue_delta_eur": (
-            storage_objective["net_revenue_eur"] - base_objective["net_revenue_eur"]
-        ),
-        **{f"impact_{key}": value for key, value in impact_metrics.items()},
+        "price_taker_realized_net_revenue_eur": realized["net_revenue_eur"],
+        "price_taker_realized_captured_spread_eur_mwh": realized["captured_spread_eur_mwh"],
+        "oracle_net_revenue_eur": None,
+        "price_taker_capture_ratio_vs_oracle": None,
     }
 
 

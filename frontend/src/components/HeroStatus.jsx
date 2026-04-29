@@ -123,7 +123,7 @@ function GreetingCard({ dashboard, error, loading, onRefresh }) {
         ) : loading ? (
           "Loading public DAM, IPTO forecasts, and optimizer output..."
         ) : forecasting?.available ? (
-          `${forecasting.registry.selected_model} forecast, ${formatEuro(forecasting.metrics.storage_aware_objective_net_revenue_eur)} storage-aware value`
+          `${forecasting.registry.selected_model} forecast, ${formatEuro(forecasting.metrics.price_taker_objective_net_revenue_eur)} forecast dispatch`
         ) : (
           `${formatEuro(metrics.net_revenue_eur)} net revenue, ${formatNumber(metrics.equivalent_cycles, 2)} cycles`
         )}
@@ -134,9 +134,11 @@ function GreetingCard({ dashboard, error, loading, onRefresh }) {
 
 function CompactAssetCard({ dashboard }) {
   const asset = dashboard?.asset;
-  const metrics = dashboard?.metrics ?? {};
   const forecasting = dashboard?.forecasting;
-  const impact = forecasting?.metrics ?? {};
+  const forecastMetrics = forecasting?.metrics ?? {};
+  const forecastBadge = forecasting?.available
+    ? `${formatNumber(forecastMetrics.base_forecast_mae_eur_mwh ?? 0, 1)} MAE`
+    : "Price-taker";
 
   return (
     <article className="dashboard-card flex h-full flex-col justify-center px-5">
@@ -145,7 +147,7 @@ function CompactAssetCard({ dashboard }) {
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold">
         <span className="rounded bg-black/45 px-2 py-2 text-dashboard-accent">{formatNumber(asset?.duration_hours ?? 2.39, 2)}h duration</span>
         <span className="rounded bg-black/45 px-2 py-2 text-dashboard-blue">{formatNumber((asset?.params?.round_trip_efficiency ?? 0.85) * 100, 0)}% RTE</span>
-        <span className="rounded bg-black/45 px-2 py-2 text-white/80">{formatNumber(impact.impact_spread_compression_pct ?? 0, 1)}% compression</span>
+        <span className="rounded bg-black/45 px-2 py-2 text-white/80">{forecastBadge}</span>
         <span className="rounded bg-black/45 px-2 py-2 text-white/80">{formatNumber(asset?.usable_energy_mwh ?? 632, 0)} MWh usable</span>
       </div>
     </article>

@@ -62,11 +62,11 @@ It renders:
 
 - `series[].dam_price_eur_mwh`: published HEnEx DAM MCP when available.
 - `series[].forecast_price_eur_mwh`: selected model base forecast.
-- `series[].storage_adjusted_forecast_eur_mwh`: storage-feedback scenario forecast.
 - `series[].charge_mw` / `series[].discharge_mw`: DAM price-taker dispatch.
-- `series[].storage_charge_mw` / `series[].storage_discharge_mw`: storage-aware dispatch.
+- `series[].forecast_charge_mw` / `series[].forecast_discharge_mw`: forecast-driven price-taker dispatch.
+- `series[].forecast_soc_pct`: forecast-driven state of charge.
 - `forecasting.registry`: selected model, feature columns, training window, and leakage audit.
-- `forecasting.metrics`: MAE/RMSE, capture metrics, price-taker value, storage-aware value, and spread compression.
+- `forecasting.metrics`: MAE/RMSE, quartile capture, forecast dispatch value, realized backtest value, and capture versus oracle.
 
 If `forecasting.available` is false, the UI stays usable and falls back to the direct DAM optimizer payload.
 If the live API request itself fails, the UI falls back to `/demo-dashboard.json`.

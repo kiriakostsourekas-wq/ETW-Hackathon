@@ -62,7 +62,7 @@ Use Italy as an analogue for market design, storage procurement, technical assum
 - AEMO Q4 2025 renewable/storage note: https://www.aemo.com.au/newsroom/media-release/renewables-supply-more-than-half-of-quarterly-energy-supply
   - Use as non-European operational regime-shift evidence for renewable/storage growth putting downward pressure on wholesale prices, not as a direct Greek market analogue.
 
-Implementation stance: keep price-taker DAM as the baseline/oracle, then report storage-aware scenarios as counterfactual regime-shift sensitivities. Do not present them as factual Greek post-launch prices until HEnEx aggregated curve slopes and observed battery bidding data are available.
+Implementation stance: keep the production dashboard price-taker-only, then run a separate HEnEx aggregated-curve re-clearing experiment to test whether one METLEN-scale BESS is negligible for national DAM MCP. Do not present assumed price feedback as factual Greek post-launch prices until curve validation and observed battery bidding data support it.
 
 ## Battery And METLEN Sources
 

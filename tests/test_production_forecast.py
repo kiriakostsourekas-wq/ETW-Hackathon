@@ -3,12 +3,13 @@ from datetime import date, timedelta
 import pandas as pd
 
 from batteryhack.optimizer import BatteryParams
-from batteryhack.production_forecast import build_storage_aware_forecast
+import batteryhack.production_forecast as production_forecast
+from batteryhack.production_forecast import build_price_taker_forecast
 from batteryhack.simulation import MarketHistory
 from batteryhack.synthetic import synthetic_market_day
 
 
-def test_storage_aware_forecast_returns_registry_and_96_rows(monkeypatch):
+def test_price_taker_forecast_returns_registry_and_96_rows(monkeypatch):
     start = date(2026, 4, 1)
     target = date(2026, 4, 22)
     frame = pd.concat(
@@ -25,9 +26,21 @@ def test_storage_aware_forecast_returns_registry_and_96_rows(monkeypatch):
             warnings=(),
         )
 
-    monkeypatch.setattr("batteryhack.production_forecast.load_market_history", fake_history)
+    optimizer_calls = 0
+    real_optimizer = production_forecast.optimize_battery_schedule
 
-    result = build_storage_aware_forecast(
+    def counting_optimizer(*args, **kwargs):
+        nonlocal optimizer_calls
+        optimizer_calls += 1
+        return real_optimizer(*args, **kwargs)
+
+    monkeypatch.setattr("batteryhack.production_forecast.load_market_history", fake_history)
+    monkeypatch.setattr(
+        "batteryhack.production_forecast.optimize_battery_schedule",
+        counting_optimizer,
+    )
+
+    result = build_price_taker_forecast(
         target,
         BatteryParams(
             power_mw=50,
@@ -42,8 +55,9 @@ def test_storage_aware_forecast_returns_registry_and_96_rows(monkeypatch):
 
     assert result.registry.selected_model in {"interval_profile", "ridge"}
     assert result.registry.leakage_audit["live_safe"] is True
-    assert len(result.base_forecast_frame) == 96
-    assert len(result.storage_adjusted_frame) == 96
-    assert "storage_adjusted_forecast_eur_mwh" in result.storage_adjusted_frame
+    assert len(result.forecast_frame) == 96
+    assert len(result.schedule) == 96
+    assert optimizer_calls == 1
+    assert "storage_adjusted_forecast_eur_mwh" not in result.forecast_frame
     assert result.metrics["base_forecast_mae_eur_mwh"] >= 0
-    assert result.metrics["storage_aware_objective_net_revenue_eur"] is not None
+    assert result.metrics["price_taker_objective_net_revenue_eur"] is not None

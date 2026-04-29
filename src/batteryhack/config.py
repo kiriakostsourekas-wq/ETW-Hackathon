@@ -17,6 +17,9 @@ HENEX_SUMMARY_URL = (
     "https://www.enexgroup.gr/documents/20126/366820/"
     "{yyyymmdd}_EL-DAM_ResultsSummary_EN_v{version:02d}.xlsx"
 )
+HENEX_DAM_PUBLICATIONS_URL = (
+    "https://www.enexgroup.gr/en/web/guest/markets-publications-el-day-ahead-market"
+)
 
 IPTO_FILE_API = (
     "https://www.admie.gr/getOperationMarketFilewRange"

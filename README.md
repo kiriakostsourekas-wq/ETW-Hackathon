@@ -1,6 +1,6 @@
 # Greek Battery Optimization Hackathon
 
-This project implements a presentation-ready prototype for constraint-aware battery scheduling in the Greek Day-Ahead Market. It combines public HEnEx DAM prices, IPTO load/RES forecasts, Open-Meteo weather, a transparent forecast proxy, a MILP battery optimizer, and a storage-aware price-impact scenario layer.
+This project implements a presentation-ready prototype for constraint-aware battery scheduling in the Greek Day-Ahead Market. It combines public HEnEx DAM prices, IPTO load/RES forecasts, Open-Meteo weather, a live-safe forecast pipeline, a MILP battery optimizer, and an offline HEnEx curve experiment for testing whether one METLEN-scale BESS can be treated as price-taker.
 
 ## Quick Start
 
@@ -36,8 +36,6 @@ Useful API query controls:
 - `include_forecast=false` skips model training and returns the fast DAM optimizer payload.
 - `forecast_history_days=21` controls the training/lookback window used by the dashboard request.
 - `validation_days=3` controls the walk-forward model selection window.
-- `impact_scenario=Storage-aware medium impact` selects the storage feedback scenario.
-- `fleet_power_mw`, `fleet_energy_mwh`, `charge_price_elasticity_eur_mwh_per_gw`, `discharge_price_elasticity_eur_mwh_per_gw`, and `spread_compression_factor` override the scenario assumptions.
 
 ## Vercel Deployment
 
@@ -72,11 +70,11 @@ Generated data is intentionally ignored by git. Use the scripts below to recreat
 
 - `src/batteryhack/data_sources.py`: HEnEx, IPTO, and Open-Meteo ingestion with xlsx parsing and local caching under `data/raw/`.
 - `src/batteryhack/optimizer.py`: SciPy HiGHS MILP battery scheduler with SoC, power, efficiency, terminal SoC, degradation, cycle, and single charge/discharge mode constraints.
-- `src/batteryhack/price_impact.py`: counterfactual storage-feedback scenarios that lift charging intervals, suppress discharging intervals, and estimate spread compression versus the price-taker baseline.
 - `src/batteryhack/forecasting.py`: explainable structural forecast proxy and Ridge model hook for deeper history.
-- `src/batteryhack/production_forecast.py`: leakage-safe forecast table builder, walk-forward model selection, model registry, storage-aware forecast adjustment, and realized/oracle value metrics.
+- `src/batteryhack/production_forecast.py`: leakage-safe forecast table builder, walk-forward model selection, model registry, price-taker dispatch, and realized/oracle value metrics.
+- `src/batteryhack/market_impact.py`: offline HEnEx aggregated-curve re-clearing experiment for testing national DAM MCP impact from one `330 MW / 790 MWh` BESS.
 - `src/batteryhack/api_server.py`: JSON API for the React dashboard, backed by HEnEx/IPTO/Open-Meteo ingestion and the MILP optimizer.
-- `app.py`: Streamlit dashboard with a submission story, METLEN dispatch, storage-aware regime-shift comparison, sensitivity grid, and source traceability.
+- `app.py`: Streamlit dashboard with a submission story, METLEN price-taker dispatch, market-impact test instructions, sensitivity grid, and source traceability.
 - `frontend/`: React/Tailwind/Recharts dashboard that consumes the optimizer API.
 - `docs/METLEN_BESS_submission_walkthrough.pptx`: six-slide editable teammate deck covering thesis, Greek problem, operational loop, data stack, simulator method, and caveats.
 - `tests/`: optimizer and data-contract tests.
@@ -114,12 +112,45 @@ Outputs are written to `data/processed/march_smoke_model_performance.csv`,
 PYTHONPATH=src python3 scripts/train_forecast_registry.py --target-date 2026-04-22
 ```
 
-This builds the live-safe feature table, runs walk-forward model selection, generates the base and storage-adjusted 15-minute price forecast, then writes:
+This builds the live-safe feature table, runs walk-forward model selection, generates the 15-minute price forecast, optimizes one price-taker schedule, then writes:
 
 - `data/processed/forecast_model_registry.json`
-- `data/processed/storage_aware_forecast.csv`
+- `data/processed/price_taker_forecast.csv`
 
-The registry records the selected model, feature columns, validation metrics, training window, source summary, leakage audit, and storage price-impact assumptions.
+The registry records the selected model, feature columns, validation metrics, training window, source summary, leakage audit, and price-taker dispatch assumptions.
+
+## Scrape No-Key Training Data
+
+```bash
+PYTHONPATH=src python3 scripts/scrape_training_data.py --start 2025-10-01 --end 2026-04-29
+```
+
+This builds a leakage-conscious 15-minute training CSV from public no-key sources:
+
+- HEnEx Results Summary MCP target prices.
+- HEnEx PreMarketSummary and POSNOMs when listed on the public DAM page.
+- IPTO load forecast, RES forecast, unit availability, ATC, and long-term PTR nominations.
+- Open-Meteo weather for the configured Greek regional points.
+
+By default, this script does **not** allow synthetic price fallback and does **not** fill missing feature columns with synthetic demo data. Outputs are written to:
+
+- `data/processed/greek_dam_training_dataset.csv`
+- `data/processed/greek_dam_training_manifest.json`
+
+## Test Single-BESS Market Impact
+
+After downloading HEnEx `EL-DAM_AggrCurves_EN` files into `data/raw/`, run:
+
+```bash
+PYTHONPATH=src python3 scripts/run_market_impact_experiment.py --start-date 2026-04-22 --curve-dir data/raw
+```
+
+The experiment optimizes one METLEN-scale dispatch, re-clears active intervals on the HEnEx aggregated curves, and writes:
+
+- `data/processed/market_impact_intervals.csv`
+- `data/processed/market_impact_daily_summary.csv`
+
+The decision rule calls one METLEN-scale BESS negligible only if median absolute MCP shift is `< 0.5 EUR/MWh`, revenue haircut is `< 2%`, and at least 80% of active intervals validate.
 
 ## Sample HEnEx 15-Minute Prices
 
@@ -145,7 +176,7 @@ Without `ENTSOE_SECURITY_TOKEN`, the script only verifies that the ENTSO-E API e
 
 See `docs/admie_market_data_catalog.md` for ADMIE/IPTO filetypes worth integrating later.
 See `docs/forecasting_signal_plan.md` for the ranked forecasting signal and leakage plan.
-See `docs/model_logic_and_forecasting.md` for the MILP optimizer, forecast pipeline, and battery regime-change explanation.
+See `docs/model_logic_and_forecasting.md` for the MILP optimizer, forecast pipeline, and HEnEx market-impact experiment.
 See `docs/vercel_deployment.md` for the Vercel static dashboard deployment path.
 See `docs/comparable_project_analysis.md` for the top GitHub analogue repositories we used to benchmark the simulator design.
 See `docs/METLEN_BESS_submission_walkthrough.pptx` for the short teammate walkthrough deck.
@@ -154,4 +185,4 @@ See `docs/METLEN_BESS_submission_walkthrough.pptx` for the short teammate walkth
 
 Greece has increasing solar/wind penetration, more midday surplus and curtailment risk, and stronger 15-minute price volatility. The battery charges when prices are low and RES output is high, then discharges into scarcity or evening peak intervals. The prototype avoids dependence on historical battery telemetry by using public market/system/weather signals plus explicit battery constraints.
 
-The demo now follows five tabs: `Story`, `Dispatch`, `Regime Shift`, `Sensitivity`, and `Data Trace`. `Regime Shift` keeps the price-taker result visible as pre-feedback value, then shows storage-aware scenario haircuts from low/medium/high price-impact assumptions.
+The demo now follows five tabs: `Story`, `Dispatch`, `Market Impact Test`, `Sensitivity`, and `Data Trace`. The main dispatch is price-taker-only; the market-impact tab explains how to test whether that assumption is defensible with HEnEx aggregated curves.

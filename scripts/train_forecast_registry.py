@@ -12,8 +12,7 @@ os.environ.setdefault("LOKY_MAX_CPU_COUNT", "1")
 
 from batteryhack.config import PROCESSED_DIR, ensure_data_dirs
 from batteryhack.optimizer import BatteryParams
-from batteryhack.price_impact import PRICE_IMPACT_SCENARIOS
-from batteryhack.production_forecast import build_storage_aware_forecast, registry_to_dict
+from batteryhack.production_forecast import build_price_taker_forecast, registry_to_dict
 
 
 def main() -> None:
@@ -23,15 +22,13 @@ def main() -> None:
     parser.add_argument("--target-date", default="2026-04-22")
     parser.add_argument("--history-days", type=int, default=21)
     parser.add_argument("--validation-days", type=int, default=3)
-    parser.add_argument("--impact-scenario", default="Storage-aware medium impact")
     parser.add_argument("--registry-output", default="forecast_model_registry.json")
-    parser.add_argument("--forecast-output", default="storage_aware_forecast.csv")
+    parser.add_argument("--forecast-output", default="price_taker_forecast.csv")
     args = parser.parse_args()
 
     ensure_data_dirs()
     target_date = date.fromisoformat(args.target_date)
     history_start = target_date - timedelta(days=args.history_days)
-    impact = PRICE_IMPACT_SCENARIOS[args.impact_scenario]
     params = BatteryParams(
         power_mw=330,
         capacity_mwh=790,
@@ -43,12 +40,11 @@ def main() -> None:
         degradation_cost_eur_mwh=4,
         max_cycles_per_day=1.5,
     )
-    result = build_storage_aware_forecast(
+    result = build_price_taker_forecast(
         target_date=target_date,
         history_start=history_start,
         validation_days=args.validation_days,
         battery_params=params,
-        impact_params=impact,
     )
 
     registry_payload = {
@@ -59,7 +55,7 @@ def main() -> None:
     registry_path = PROCESSED_DIR / args.registry_output
     registry_path.write_text(json.dumps(registry_payload, indent=2, default=_json_default))
 
-    forecast_frame = result.base_forecast_frame[
+    forecast_frame = result.forecast_frame[
         [
             "timestamp",
             "interval",
@@ -69,13 +65,7 @@ def main() -> None:
             "forecast_high_eur_mwh",
         ]
     ].merge(
-        result.storage_adjusted_frame[
-            [
-                "timestamp",
-                "storage_adjusted_forecast_eur_mwh",
-                "storage_price_adjustment_eur_mwh",
-            ]
-        ],
+        result.schedule[["timestamp", "charge_mw", "discharge_mw", "soc_pct_end"]],
         on="timestamp",
         how="left",
     )

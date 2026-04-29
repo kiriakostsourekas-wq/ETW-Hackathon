@@ -39,7 +39,6 @@ function ChartTooltip({ active, payload, label }) {
         const isPrice = [
           "dam_price_eur_mwh",
           "forecast_price_eur_mwh",
-          "storage_adjusted_forecast_eur_mwh",
         ].includes(entry.dataKey);
         const suffix = isPrice ? " EUR/MWh" : entry.dataKey === "soc_pct" ? "%" : " MW";
         return (
@@ -95,7 +94,7 @@ export default function OperationsPanel({ dashboard, loading }) {
           </h2>
           <div className="mt-3 flex items-center gap-4 text-sm font-bold text-white/75">
             <span>{forecasting?.available ? registry.selected_model : "DAM optimizer"}</span>
-            <span>{formatEuro(forecastMetrics.storage_aware_objective_net_revenue_eur ?? metrics.net_revenue_eur)} storage-aware</span>
+            <span>{formatEuro(forecastMetrics.price_taker_objective_net_revenue_eur ?? metrics.net_revenue_eur)} forecast dispatch</span>
             <span>{formatNumber(forecastMetrics.base_forecast_mae_eur_mwh ?? 0, 2)} EUR/MWh MAE</span>
             <span>{formatNumber(metrics.res_share_pct, 1)}% RES/load</span>
             <span>{sourceCount} public sources</span>
@@ -121,7 +120,6 @@ export default function OperationsPanel({ dashboard, loading }) {
           <LegendItem color="#65b8f2" label="RES" />
           <LegendItem color="#d4f700" label="DAM" />
           <LegendItem color="#b9b35b" label="Base Forecast" />
-          <LegendItem color="#ff8f5c" label="Storage Forecast" />
           <LegendItem color="#f2b35e" label="Discharge" />
           <LegendItem color="#4fc3f7" label="Charge" />
         </div>
@@ -148,7 +146,6 @@ export default function OperationsPanel({ dashboard, loading }) {
             <Bar yAxisId="mw" dataKey="discharge_mw" name="Discharge" fill="#f2b35e" fillOpacity={0.9} radius={[3, 3, 0, 0]} />
             <Line yAxisId="price" type="monotone" dataKey="dam_price_eur_mwh" name="DAM Price" stroke="#d4f700" strokeWidth={2.4} dot={false} />
             <Line yAxisId="price" type="monotone" dataKey="forecast_price_eur_mwh" name="Base Forecast" stroke="#b9b35b" strokeWidth={1.8} strokeDasharray="4 4" dot={false} connectNulls />
-            <Line yAxisId="price" type="monotone" dataKey="storage_adjusted_forecast_eur_mwh" name="Storage Forecast" stroke="#ff8f5c" strokeWidth={1.9} strokeDasharray="6 4" dot={false} connectNulls />
           </ComposedChart>
         </ResponsiveContainer>
       </div>

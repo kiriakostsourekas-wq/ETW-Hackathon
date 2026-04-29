@@ -16,8 +16,7 @@ import pandas as pd
 from .config import DEFAULT_DEMO_DATE, MTU_HOURS
 from .data_sources import load_market_bundle
 from .optimizer import BatteryParams, optimize_battery_schedule
-from .price_impact import PRICE_IMPACT_SCENARIOS, StorageImpactParams
-from .production_forecast import build_storage_aware_forecast, registry_to_dict
+from .production_forecast import build_price_taker_forecast, registry_to_dict
 
 
 DEFAULT_ASSET = BatteryParams(
@@ -104,32 +103,6 @@ def _params_from_query(query: dict[str, list[str]]) -> BatteryParams:
     )
 
 
-def _impact_params_from_query(query: dict[str, list[str]]) -> StorageImpactParams:
-    scenario_name = query.get("impact_scenario", ["Storage-aware medium impact"])[0]
-    base = PRICE_IMPACT_SCENARIOS.get(scenario_name, PRICE_IMPACT_SCENARIOS["Storage-aware medium impact"])
-    return StorageImpactParams(
-        fleet_power_mw=_param_float(query, "fleet_power_mw", base.fleet_power_mw),
-        fleet_energy_mwh=_param_float(query, "fleet_energy_mwh", base.fleet_energy_mwh),
-        charge_price_elasticity_eur_mwh_per_gw=_param_float(
-            query,
-            "charge_price_elasticity_eur_mwh_per_gw",
-            base.charge_price_elasticity_eur_mwh_per_gw,
-        ),
-        discharge_price_elasticity_eur_mwh_per_gw=_param_float(
-            query,
-            "discharge_price_elasticity_eur_mwh_per_gw",
-            base.discharge_price_elasticity_eur_mwh_per_gw,
-        ),
-        spread_compression_factor=_param_float(
-            query,
-            "spread_compression_factor",
-            base.spread_compression_factor,
-        ),
-        reference_power_mw=base.reference_power_mw,
-        scenario_name=base.scenario_name,
-    )
-
-
 def _hourly_sparkline(frame: pd.DataFrame, column: str, reducer: str = "mean") -> list[float]:
     hourly = frame.copy()
     hourly["hour"] = pd.to_datetime(hourly["timestamp"]).dt.hour
@@ -170,7 +143,6 @@ def build_dashboard_payload(
     include_forecast: bool = True,
     forecast_history_days: int = 21,
     validation_days: int = 3,
-    impact_params: StorageImpactParams | None = None,
 ) -> dict[str, Any]:
     bundle = load_market_bundle(delivery_date)
     market = bundle.frame.copy()
@@ -259,16 +231,16 @@ def build_dashboard_payload(
     forecasting = {"available": False, "error": None}
     if include_forecast:
         try:
-            production = build_storage_aware_forecast(
+            production = build_price_taker_forecast(
                 target_date=delivery_date,
                 battery_params=params,
                 history_start=delivery_date - timedelta(days=forecast_history_days),
                 validation_days=validation_days,
-                impact_params=impact_params,
             )
-            forecasting = _forecasting_payload(production)
+            forecast_metrics = _metrics_with_oracle(production.metrics, output.metrics)
+            forecasting = _forecasting_payload(production, forecast_metrics)
             series = _merge_forecast_outputs(series, production)
-            kpis = _forecast_kpis(production, series)
+            kpis = _forecast_kpis(production, forecast_metrics, series)
         except Exception as exc:  # noqa: BLE001 - dashboard should degrade gracefully
             forecasting = {
                 "available": False,
@@ -302,25 +274,12 @@ def build_dashboard_payload(
                 ),
                 "forecast_low_eur_mwh": _round(getattr(row, "forecast_low_eur_mwh", None), 2),
                 "forecast_high_eur_mwh": _round(getattr(row, "forecast_high_eur_mwh", None), 2),
-                "storage_adjusted_forecast_eur_mwh": _round(
-                    getattr(row, "storage_adjusted_forecast_eur_mwh", None),
-                    2,
-                ),
-                "storage_price_adjustment_eur_mwh": _round(
-                    getattr(row, "storage_price_adjustment_eur_mwh", None),
-                    2,
-                ),
                 "forecast_charge_mw": _round(getattr(row, "forecast_charge_mw", None), 4),
                 "forecast_discharge_mw": _round(
                     getattr(row, "forecast_discharge_mw", None),
                     4,
                 ),
-                "storage_charge_mw": _round(getattr(row, "storage_charge_mw", None), 4),
-                "storage_discharge_mw": _round(
-                    getattr(row, "storage_discharge_mw", None),
-                    4,
-                ),
-                "storage_soc_pct": _round(getattr(row, "storage_soc_pct", None), 2),
+                "forecast_soc_pct": _round(getattr(row, "forecast_soc_pct", None), 2),
             }
         )
 
@@ -352,7 +311,7 @@ def build_dashboard_payload(
 
 
 def _merge_forecast_outputs(series: pd.DataFrame, production) -> pd.DataFrame:
-    base = production.base_forecast_frame[
+    base = production.forecast_frame[
         [
             "timestamp",
             "forecast_price_eur_mwh",
@@ -360,14 +319,7 @@ def _merge_forecast_outputs(series: pd.DataFrame, production) -> pd.DataFrame:
             "forecast_high_eur_mwh",
         ]
     ].copy()
-    adjusted = production.storage_adjusted_frame[
-        [
-            "timestamp",
-            "storage_adjusted_forecast_eur_mwh",
-            "storage_price_adjustment_eur_mwh",
-        ]
-    ].copy()
-    base_schedule = production.base_schedule[
+    schedule = production.schedule[
         ["timestamp", "charge_mw", "discharge_mw", "soc_pct_end"]
     ].rename(
         columns={
@@ -376,37 +328,40 @@ def _merge_forecast_outputs(series: pd.DataFrame, production) -> pd.DataFrame:
             "soc_pct_end": "forecast_soc_pct",
         }
     )
-    storage_schedule = production.storage_schedule[
-        ["timestamp", "charge_mw", "discharge_mw", "soc_pct_end"]
-    ].rename(
-        columns={
-            "charge_mw": "storage_charge_mw",
-            "discharge_mw": "storage_discharge_mw",
-            "soc_pct_end": "storage_soc_pct",
-        }
-    )
-    forecast_series = (
-        base.merge(adjusted, on="timestamp", how="left")
-        .merge(base_schedule, on="timestamp", how="left")
-        .merge(storage_schedule, on="timestamp", how="left")
-    )
+    forecast_series = base.merge(schedule, on="timestamp", how="left")
     return series.merge(forecast_series, on="timestamp", how="left")
 
 
-def _forecasting_payload(production) -> dict[str, Any]:
+def _forecasting_payload(production, metrics: dict[str, Any]) -> dict[str, Any]:
     return {
         "available": True,
         "registry": _json_safe(registry_to_dict(production.registry)),
-        "metrics": _json_safe(production.metrics),
+        "metrics": _json_safe(metrics),
         "assumptions": _json_safe(production.assumptions),
         "model_performance": _records(production.model_performance),
         "daily_model_performance": _records(production.daily_model_performance),
     }
 
 
-def _forecast_kpis(production, series: pd.DataFrame) -> list[dict[str, Any]]:
-    metrics = production.metrics
+def _metrics_with_oracle(
+    forecast_metrics: dict[str, Any],
+    oracle_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    metrics = dict(forecast_metrics)
+    oracle_net = oracle_metrics.get("net_revenue_eur")
+    metrics["oracle_net_revenue_eur"] = oracle_net
+    realized_net = metrics.get("price_taker_realized_net_revenue_eur")
+    metrics["price_taker_capture_ratio_vs_oracle"] = (
+        realized_net / oracle_net
+        if oracle_net is not None and realized_net is not None and abs(oracle_net) > 1e-9
+        else None
+    )
+    return metrics
+
+
+def _forecast_kpis(production, metrics: dict[str, Any], series: pd.DataFrame) -> list[dict[str, Any]]:
     registry = production.registry
+    capture = metrics.get("price_taker_capture_ratio_vs_oracle")
     return [
         {
             "label": "Forecast MAE",
@@ -416,25 +371,25 @@ def _forecast_kpis(production, series: pd.DataFrame) -> list[dict[str, Any]]:
             "sparkline": _hourly_sparkline(series, "forecast_price_eur_mwh"),
         },
         {
-            "label": "Storage-Aware Net",
-            "value": f"EUR {metrics['storage_aware_objective_net_revenue_eur']:,.0f}",
-            "badge": "Regime",
-            "detail": "Objective after price feedback",
-            "sparkline": _hourly_sparkline(series, "storage_price_adjustment_eur_mwh"),
+            "label": "Forecast Dispatch Net",
+            "value": f"EUR {metrics['price_taker_objective_net_revenue_eur']:,.0f}",
+            "badge": "Price-taker",
+            "detail": "One optimizer pass on forecast MCP",
+            "sparkline": _hourly_sparkline(series, "forecast_charge_mw"),
         },
         {
-            "label": "Spread Compression",
-            "value": f"{metrics['impact_spread_compression_pct']:,.1f}%",
-            "badge": "Scenario",
-            "detail": f"{metrics['impact_average_spread_compression_eur_mwh']:,.1f} EUR/MWh",
-            "sparkline": _hourly_sparkline(series, "storage_adjusted_forecast_eur_mwh"),
+            "label": "Realized Backtest",
+            "value": f"EUR {metrics['price_taker_realized_net_revenue_eur']:,.0f}",
+            "badge": "Published DAM",
+            "detail": "Same schedule settled on actual MCP",
+            "sparkline": _hourly_sparkline(series, "forecast_discharge_mw"),
         },
         {
             "label": "Capture vs Oracle",
-            "value": f"{(metrics['storage_aware_capture_ratio_vs_oracle'] or 0) * 100:,.1f}%",
+            "value": f"{(capture or 0) * 100:,.1f}%",
             "badge": "Backtest",
             "detail": "Settled against published DAM",
-            "sparkline": _hourly_sparkline(series, "storage_soc_pct"),
+            "sparkline": _hourly_sparkline(series, "forecast_soc_pct"),
             "active": True,
         },
     ]
@@ -500,7 +455,6 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                     include_forecast=include_forecast,
                     forecast_history_days=_param_int(query, "forecast_history_days", 21),
                     validation_days=_param_int(query, "validation_days", 3),
-                    impact_params=_impact_params_from_query(query),
                 )
                 self._send_json(payload)
                 return
