@@ -8,6 +8,7 @@ __all__ = [
     "data_sources",
     "forecasting",
     "optimizer",
+    "price_impact",
     "presets",
     "signal_catalog",
     "synthetic",

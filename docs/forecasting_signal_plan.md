@@ -9,6 +9,21 @@ The target is HEnEx Greek Day-Ahead Market MCP at 15-minute resolution. Publishe
 coupling, aggregated curves, realized SCADA, and dispatch results are post-clearing diagnostics
 unless a timestamp check proves they were available before the modeled decision time.
 
+## Storage Regime-Shift Caveat
+
+Greek standalone BESS participation changes the price formation problem itself. Pre-battery MCP
+history does not include fleet-scale battery demand in low-price/high-RES intervals or fleet-scale
+battery supply in high-price evening intervals. Forecast models trained only on historic drivers
+should therefore be treated as pre-feedback labels that can overstate future spreads.
+
+The implemented mitigation is a storage-aware scenario layer:
+
+- keep the price-taker optimizer as the baseline value case,
+- adjust prices counterfactually after the battery schedule is known,
+- lift charge intervals, suppress discharge intervals, and compress daily spreads,
+- expose low, medium, and high impact assumptions plus participating fleet MW/MWh,
+- later replace scenario elasticities with HEnEx aggregated buy/sell curve slopes.
+
 ## Live-Eligible Feature Families
 
 - Residual demand: ADMIE/IPTO day-ahead load forecast minus RES forecast.

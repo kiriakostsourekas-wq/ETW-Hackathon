@@ -1,6 +1,6 @@
 # Greek Battery Optimization Hackathon
 
-This project implements a presentation-ready prototype for constraint-aware battery scheduling in the Greek Day-Ahead Market. It combines public HEnEx DAM prices, IPTO load/RES forecasts, Open-Meteo weather, a transparent forecast proxy, and a MILP battery optimizer.
+This project implements a presentation-ready prototype for constraint-aware battery scheduling in the Greek Day-Ahead Market. It combines public HEnEx DAM prices, IPTO load/RES forecasts, Open-Meteo weather, a transparent forecast proxy, a MILP battery optimizer, and a storage-aware price-impact scenario layer.
 
 ## Quick Start
 
@@ -36,8 +36,10 @@ Generated data is intentionally ignored by git. Use the scripts below to recreat
 
 - `src/batteryhack/data_sources.py`: HEnEx, IPTO, and Open-Meteo ingestion with xlsx parsing and local caching under `data/raw/`.
 - `src/batteryhack/optimizer.py`: SciPy HiGHS MILP battery scheduler with SoC, power, efficiency, terminal SoC, degradation, cycle, and single charge/discharge mode constraints.
+- `src/batteryhack/price_impact.py`: counterfactual storage-feedback scenarios that lift charging intervals, suppress discharging intervals, and estimate spread compression versus the price-taker baseline.
 - `src/batteryhack/forecasting.py`: explainable structural forecast proxy and Ridge model hook for deeper history.
-- `app.py`: Streamlit dashboard with battery controls, dispatch, SoC, forecast/system signals, business framing, and source traceability.
+- `app.py`: Streamlit dashboard with a submission story, METLEN dispatch, storage-aware regime-shift comparison, sensitivity grid, and source traceability.
+- `docs/METLEN_BESS_submission_walkthrough.pptx`: six-slide editable teammate deck covering thesis, Greek problem, operational loop, data stack, simulator method, and caveats.
 - `tests/`: optimizer and data-contract tests.
 
 ## Run Tests
@@ -79,7 +81,10 @@ Without `ENTSOE_SECURITY_TOKEN`, the script only verifies that the ENTSO-E API e
 See `docs/admie_market_data_catalog.md` for ADMIE/IPTO filetypes worth integrating later.
 See `docs/forecasting_signal_plan.md` for the ranked forecasting signal and leakage plan.
 See `docs/comparable_project_analysis.md` for the top GitHub analogue repositories we used to benchmark the simulator design.
+See `docs/METLEN_BESS_submission_walkthrough.pptx` for the short teammate walkthrough deck.
 
 ## Demo Narrative
 
 Greece has increasing solar/wind penetration, more midday surplus and curtailment risk, and stronger 15-minute price volatility. The battery charges when prices are low and RES output is high, then discharges into scarcity or evening peak intervals. The prototype avoids dependence on historical battery telemetry by using public market/system/weather signals plus explicit battery constraints.
+
+The demo now follows five tabs: `Story`, `Dispatch`, `Regime Shift`, `Sensitivity`, and `Data Trace`. `Regime Shift` keeps the price-taker result visible as pre-feedback value, then shows storage-aware scenario haircuts from low/medium/high price-impact assumptions.

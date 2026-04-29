@@ -48,6 +48,22 @@ Use Italy as an analogue for market design, storage procurement, technical assum
 - OMIE market results: https://www.omie.es/en/market-results
 - Spain BESS and renewable-integration studies are useful for PV-heavy price-shape and balancing-risk analogues, but should not be used as direct labels for Greek battery dispatch.
 
+## Storage Price-Impact And Regime-Shift Sources
+
+- CAISO 2024 battery storage report: https://www.caiso.com/documents/2024-special-report-on-battery-storage-may-29-2025.pdf
+  - Use as evidence that large batteries charge heavily in solar hours and discharge in late afternoon/evening scarcity windows.
+  - Use revenue decline and capacity-growth context to explain why pre-storage historical spreads can overstate future arbitrage value.
+- NREL / Applied Energy storage price-impact summary: https://www.osti.gov/biblio/1845688
+  - Use for the modeling caveat that price-taker storage valuations can overestimate value by missing storage's own price-suppression effect.
+- Spain BESS spread-compression study: https://www.sciencedirect.com/science/article/pii/S2352484725008674
+  - Use for the Greek fallback path: day-ahead bidding curves as an elasticity proxy when direct battery telemetry is unavailable.
+- California empirical storage/spread study: https://www.sciencedirect.com/science/article/pii/S0140988321006241
+  - Use as evidence that increasing storage penetration can reduce average intraday wholesale price spreads.
+- AEMO Q4 2025 renewable/storage note: https://www.aemo.com.au/newsroom/media-release/renewables-supply-more-than-half-of-quarterly-energy-supply
+  - Use as non-European operational regime-shift evidence for renewable/storage growth putting downward pressure on wholesale prices, not as a direct Greek market analogue.
+
+Implementation stance: keep price-taker DAM as the baseline/oracle, then report storage-aware scenarios as counterfactual regime-shift sensitivities. Do not present them as factual Greek post-launch prices until HEnEx aggregated curve slopes and observed battery bidding data are available.
+
 ## Battery And METLEN Sources
 
 - METLEN + Karatzis 330 MW / 790 MWh standalone BESS: https://www.metlen.com/news/press-releases/strategic-agreement-between-metlen-and-karatzis-group-for-the-largest-standalone-energy-storage-unit-in-greece/
