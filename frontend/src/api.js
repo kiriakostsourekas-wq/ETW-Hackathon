@@ -3,7 +3,7 @@ const API_BASE =
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin);
 
 const DEMO_PAYLOAD_URL = "/demo-dashboard.json";
-const LIVE_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 30000);
+const LIVE_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000);
 
 export async function fetchDashboardData(params = {}) {
   try {

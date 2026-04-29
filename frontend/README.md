@@ -10,7 +10,7 @@ From the repository root, run both the optimizer API and dashboard:
 python3 run_dashboard.py
 ```
 
-Or start each server manually.
+The runner installs missing Python/frontend dependencies by default. Or start each server manually.
 
 Start the Python API from the repository root:
 

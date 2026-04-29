@@ -22,7 +22,7 @@ Run both the API and dashboard with one command:
 python3 run_dashboard.py
 ```
 
-The script prints the Vite URL to open. It starts the optimizer API on port `8000` unless one is already healthy, and starts the dashboard on port `5173` unless Vite needs to choose the next available port.
+The script installs missing Python/frontend dependencies, prints the Vite URL to open, starts the optimizer API on port `8000` unless one is already healthy, and starts the dashboard on port `5173` unless Vite needs to choose the next available port.
 
 Terminal 1:
 

@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import threading
@@ -15,6 +17,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND_DIR = ROOT / "frontend"
+REQUIRED_PYTHON_MODULES = {
+    "numpy": "numpy",
+    "openpyxl": "openpyxl",
+    "pandas": "pandas",
+    "requests": "requests",
+    "scikit-learn": "sklearn",
+    "scipy": "scipy",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,6 +33,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--api-port", type=int, default=8000, help="Python optimizer API port.")
     parser.add_argument("--ui-port", type=int, default=5173, help="Preferred Vite dashboard port.")
     parser.add_argument("--skip-api", action="store_true", help="Only start the React dashboard.")
+    parser.add_argument("--no-pip-install", action="store_true", help="Do not install Python dependencies if packages are missing.")
+    parser.add_argument("--no-npm-install", action="store_true", help="Do not install frontend dependencies if node_modules is missing.")
     return parser.parse_args()
 
 
@@ -33,6 +45,86 @@ def api_is_healthy(host: str, port: int) -> bool:
             return response.status == 200
     except (OSError, urllib.error.URLError):
         return False
+
+
+def missing_python_packages() -> list[str]:
+    return [
+        package
+        for package, module in REQUIRED_PYTHON_MODULES.items()
+        if importlib.util.find_spec(module) is None
+    ]
+
+
+def ensure_python_dependencies(skip_install: bool) -> bool:
+    missing = missing_python_packages()
+    if not missing:
+        return True
+
+    if skip_install:
+        print(
+            "Missing Python packages: "
+            + ", ".join(missing)
+            + "\nRun `python3 -m pip install -r requirements.txt`.",
+            file=sys.stderr,
+        )
+        return False
+
+    print(
+        "Missing Python packages: "
+        + ", ".join(missing)
+        + "\nRunning `python3 -m pip install -r requirements.txt` ...",
+        flush=True,
+    )
+    result = subprocess.run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=ROOT)
+    if result.returncode != 0:
+        print("pip install failed. Fix the pip error above, then rerun python3 run_dashboard.py.", file=sys.stderr)
+        return False
+
+    missing_after_install = missing_python_packages()
+    if missing_after_install:
+        print(
+            "Still missing Python packages after install: " + ", ".join(missing_after_install),
+            file=sys.stderr,
+        )
+        return False
+
+    return True
+
+
+def ensure_npm() -> bool:
+    if shutil.which("npm"):
+        return True
+    print("npm was not found. Install Node.js, then rerun python3 run_dashboard.py.", file=sys.stderr)
+    return False
+
+
+def ensure_frontend_dependencies(skip_install: bool) -> bool:
+    if (FRONTEND_DIR / "node_modules").exists():
+        return True
+
+    if skip_install:
+        print("Missing frontend/node_modules. Run `cd frontend && npm install`.", file=sys.stderr)
+        return False
+
+    print("frontend/node_modules is missing. Running `npm install` in frontend/ ...", flush=True)
+    result = subprocess.run(["npm", "install"], cwd=FRONTEND_DIR)
+    if result.returncode != 0:
+        print("npm install failed. Fix the npm error above, then rerun python3 run_dashboard.py.", file=sys.stderr)
+        return False
+    return True
+
+
+def wait_for_api(host: str, port: int, process: subprocess.Popen[str] | None, timeout_seconds: int = 45) -> bool:
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        if api_is_healthy(host, port):
+            return True
+        if process is not None and process.poll() is not None:
+            print("Optimizer API exited before becoming healthy.", file=sys.stderr)
+            return False
+        time.sleep(0.4)
+    print(f"Optimizer API did not become healthy within {timeout_seconds}s.", file=sys.stderr)
+    return False
 
 
 def stream_output(process: subprocess.Popen[str], label: str) -> None:
@@ -82,6 +174,12 @@ def main() -> int:
     if not FRONTEND_DIR.exists():
         print(f"Missing frontend directory: {FRONTEND_DIR}", file=sys.stderr)
         return 1
+    if not args.skip_api and not ensure_python_dependencies(args.no_pip_install):
+        return 1
+    if not ensure_npm():
+        return 1
+    if not ensure_frontend_dependencies(args.no_npm_install):
+        return 1
 
     processes: list[subprocess.Popen[str]] = []
     original_sigint = signal.getsignal(signal.SIGINT)
@@ -98,6 +196,7 @@ def main() -> int:
     signal.signal(signal.SIGTERM, shutdown)
 
     try:
+        api_process: subprocess.Popen[str] | None = None
         if args.skip_api:
             print("Skipping optimizer API startup.")
         elif api_is_healthy(args.host, args.api_port):
@@ -105,23 +204,25 @@ def main() -> int:
         else:
             env = os.environ.copy()
             env["PYTHONPATH"] = str(ROOT / "src")
-            processes.append(
-                start_process(
-                    [
-                        sys.executable,
-                        "-m",
-                        "batteryhack.api_server",
-                        "--host",
-                        args.host,
-                        "--port",
-                        str(args.api_port),
-                    ],
-                    cwd=ROOT,
-                    env=env,
-                    label="api",
-                )
+            api_process = start_process(
+                [
+                    sys.executable,
+                    "-m",
+                    "batteryhack.api_server",
+                    "--host",
+                    args.host,
+                    "--port",
+                    str(args.api_port),
+                ],
+                cwd=ROOT,
+                env=env,
+                label="api",
             )
+            processes.append(api_process)
             print(f"Starting optimizer API at http://{args.host}:{args.api_port}")
+            if not wait_for_api(args.host, args.api_port, api_process):
+                return 1
+            print("Optimizer API is healthy.")
 
         env = os.environ.copy()
         env.setdefault("VITE_API_BASE", f"http://{args.host}:{args.api_port}")
