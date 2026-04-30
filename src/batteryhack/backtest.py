@@ -42,6 +42,7 @@ def run_backtest(
                 "captured_spread_eur_mwh": optimized.metrics["captured_spread_eur_mwh"],
                 "used_public_dam": bundle.sources.get("DAM prices", "").startswith("https://"),
                 "warning_count": len(bundle.warnings),
+                "optional_unavailable_count": len(bundle.optional_unavailable),
             }
         )
     return pd.DataFrame(rows)

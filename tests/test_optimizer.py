@@ -4,7 +4,9 @@ from dataclasses import replace
 from datetime import date
 
 import numpy as np
+import pytest
 
+from batteryhack.config import MTU_HOURS
 from batteryhack.optimizer import BatteryParams, optimize_battery_schedule
 from batteryhack.presets import BATTERY_PRESETS, METLEN_PRESET_NAME
 from batteryhack.synthetic import day_index
@@ -57,6 +59,11 @@ def test_metlen_preset_values_are_valid() -> None:
     assert params.min_soc_pct == 10.0
     assert params.max_soc_pct == 90.0
     assert params.round_trip_efficiency == 0.85
+    assert params.initial_soc_pct == 50.0
+    assert params.terminal_soc_pct == 50.0
+    assert params.degradation_cost_eur_mwh == 4.0
+    assert params.max_cycles_per_day == 1.5
+    assert params.enforce_single_mode is True
 
 
 def test_metlen_scale_constraints_hold() -> None:
@@ -121,3 +128,62 @@ def test_higher_efficiency_does_not_reduce_net_revenue() -> None:
     )
 
     assert optimistic.metrics["net_revenue_eur"] >= base.metrics["net_revenue_eur"] - 1e-6
+
+
+def test_initial_terminal_soc_degradation_and_single_mode_constraints_hold() -> None:
+    market = day_index(date(2026, 4, 22))
+    market["dam_price_eur_mwh"] = np.r_[
+        np.full(24, 15.0),
+        np.full(24, 180.0),
+        np.full(24, 10.0),
+        np.full(24, 160.0),
+    ]
+    params = BatteryParams(
+        power_mw=25.0,
+        capacity_mwh=100.0,
+        round_trip_efficiency=0.90,
+        min_soc_pct=20.0,
+        max_soc_pct=80.0,
+        initial_soc_pct=30.0,
+        terminal_soc_pct=70.0,
+        degradation_cost_eur_mwh=3.0,
+        max_cycles_per_day=0.75,
+    )
+
+    result = optimize_battery_schedule(market, params)
+    schedule = result.schedule
+
+    assert np.isclose(schedule["soc_mwh_start"].iloc[0], 30.0, atol=1e-6)
+    assert np.isclose(schedule["soc_mwh_end"].iloc[-1], 70.0, atol=1e-6)
+    assert schedule["soc_pct_end"].between(20.0 - 1e-6, 80.0 + 1e-6).all()
+    assert ((schedule["charge_mw"] > 1e-6) & (schedule["discharge_mw"] > 1e-6)).sum() == 0
+    assert result.metrics["equivalent_cycles"] <= 0.75 + 1e-6
+
+    throughput_mwh = (
+        (schedule["charge_mw"] + schedule["discharge_mw"]).sum() * MTU_HOURS
+    )
+    assert np.isclose(
+        schedule["degradation_cost_eur"].sum(),
+        params.degradation_cost_eur_mwh * throughput_mwh,
+        atol=1e-6,
+    )
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        BatteryParams(min_soc_pct=90.0, max_soc_pct=10.0),
+        BatteryParams(min_soc_pct=-1.0, max_soc_pct=90.0),
+        BatteryParams(min_soc_pct=10.0, max_soc_pct=101.0),
+        BatteryParams(min_soc_pct=10.0, max_soc_pct=90.0, initial_soc_pct=5.0),
+        BatteryParams(min_soc_pct=10.0, max_soc_pct=90.0, terminal_soc_pct=95.0),
+        BatteryParams(degradation_cost_eur_mwh=-1.0),
+        BatteryParams(max_cycles_per_day=-0.1),
+    ],
+)
+def test_invalid_battery_constraints_raise(params: BatteryParams) -> None:
+    market = day_index(date(2026, 4, 22))
+    market["dam_price_eur_mwh"] = 80.0
+
+    with pytest.raises(ValueError):
+        optimize_battery_schedule(market, params)

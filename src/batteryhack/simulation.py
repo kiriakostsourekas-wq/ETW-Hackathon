@@ -32,6 +32,7 @@ class MarketHistory:
     frame: pd.DataFrame
     source_summary: dict[str, int]
     warnings: tuple[str, ...]
+    optional_unavailable: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,7 @@ def load_market_history(
 ) -> MarketHistory:
     frames: list[pd.DataFrame] = []
     warnings: list[str] = []
+    optional_unavailable: list[str] = []
     public_price_days = 0
     synthetic_price_days = 0
 
@@ -66,6 +68,9 @@ def load_market_history(
         frame["delivery_date"] = delivery_date
         frames.append(frame)
         warnings.extend(f"{delivery_date}: {warning}" for warning in bundle.warnings)
+        optional_unavailable.extend(
+            f"{delivery_date}: {note}" for note in bundle.optional_unavailable
+        )
         if frame["data_quality"].iloc[0] == "public price data":
             public_price_days += 1
         else:
@@ -79,8 +84,10 @@ def load_market_history(
             "public_price_days": public_price_days,
             "synthetic_price_days": synthetic_price_days,
             "warnings": len(warnings),
+            "optional_sources_unavailable": len(optional_unavailable),
         },
         warnings=tuple(warnings),
+        optional_unavailable=tuple(optional_unavailable),
     )
 
 

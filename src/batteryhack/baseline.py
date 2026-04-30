@@ -13,6 +13,25 @@ from .synthetic import day_index
 
 
 BASELINE_PRICE_COL = "baseline_forecast_price_eur_mwh"
+UK_NAIVE_BASELINE_NAME = "uk_naive_baseline"
+UK_NAIVE_PREVIOUS_DAY_METHOD = "uk_naive_previous_day_persistence"
+UK_NAIVE_FALLBACK_METHOD = "uk_naive_prior_7_day_interval_median"
+
+BASELINE_JOIN_COLUMNS = [
+    "delivery_date",
+    "benchmark",
+    "baseline_method",
+    "forecast_mae_eur_mwh",
+    "forecast_rmse_eur_mwh",
+    "forecast_spread_direction_accuracy",
+    "realized_net_revenue_eur",
+    "oracle_net_revenue_eur",
+    "capture_ratio_vs_oracle",
+    "realized_charged_mwh",
+    "realized_discharged_mwh",
+    "realized_equivalent_cycles",
+    "realized_captured_spread_eur_mwh",
+]
 
 
 @dataclass(frozen=True)
@@ -29,16 +48,18 @@ class BaselineDispatch:
     metrics: dict[str, float | str | bool | None]
 
 
-def build_persistence_price_forecast(
+def build_uk_naive_price_forecast(
     history: pd.DataFrame,
     target_date: date,
     fallback_days: int = 7,
 ) -> BaselineForecast:
-    """Build a no-lookahead persistence price forecast for one delivery day.
+    """Build the UK-style naive no-lookahead forecast for one Greek delivery day.
 
-    Normal case: copy the previous calendar day's 96 public DAM prices interval-by-interval.
-    Fallback: if that previous day is unavailable or malformed, use the interval median over
-    the last ``fallback_days`` valid public-price days before the target.
+    The benchmark intentionally stays simple: copy the previous calendar day's 96 public
+    Greek DAM prices interval-by-interval, then self-schedule the battery with the same MILP
+    and BatteryParams used by the ML strategy. If the previous day is unavailable or malformed,
+    use the interval median over the last ``fallback_days`` valid public-price days before the
+    target. Target-day prices are never used to build the forecast.
     """
     if fallback_days < 1:
         raise ValueError("fallback_days must be at least 1")
@@ -52,33 +73,42 @@ def build_persistence_price_forecast(
         prices = previous.set_index("interval")["dam_price_eur_mwh"]
         output = target_index.copy()
         output[BASELINE_PRICE_COL] = output["interval"].map(prices).to_numpy(float)
-        output["baseline_method"] = "previous_day_persistence"
+        output["baseline_method"] = UK_NAIVE_PREVIOUS_DAY_METHOD
         output["baseline_source_dates"] = previous_day.isoformat()
         return BaselineForecast(
             frame=output,
-            method="previous_day_persistence",
+            method=UK_NAIVE_PREVIOUS_DAY_METHOD,
             source_dates=(previous_day.isoformat(),),
         )
 
     fallback = _fallback_interval_median(prior, target_date, fallback_days)
     output = target_index.copy()
     output[BASELINE_PRICE_COL] = output["interval"].map(fallback["prices"]).to_numpy(float)
-    output["baseline_method"] = "prior_7_day_interval_median"
+    output["baseline_method"] = UK_NAIVE_FALLBACK_METHOD
     output["baseline_source_dates"] = ",".join(fallback["source_dates"])
     return BaselineForecast(
         frame=output,
-        method="prior_7_day_interval_median",
+        method=UK_NAIVE_FALLBACK_METHOD,
         source_dates=tuple(fallback["source_dates"]),
     )
 
 
-def run_persistence_self_schedule_baseline(
+def build_persistence_price_forecast(
+    history: pd.DataFrame,
+    target_date: date,
+    fallback_days: int = 7,
+) -> BaselineForecast:
+    """Backward-compatible alias for the named UK naive benchmark forecast."""
+    return build_uk_naive_price_forecast(history, target_date, fallback_days)
+
+
+def run_uk_naive_self_schedule_baseline(
     history: pd.DataFrame,
     target_frame: pd.DataFrame,
     battery_params: BatteryParams,
 ) -> BaselineDispatch:
     target_date = _single_target_date(target_frame)
-    forecast = build_persistence_price_forecast(history, target_date)
+    forecast = build_uk_naive_price_forecast(history, target_date)
     forecast_frame = target_frame.drop(columns=[BASELINE_PRICE_COL], errors="ignore").merge(
         forecast.frame[["timestamp", "interval", BASELINE_PRICE_COL]],
         on=["timestamp", "interval"],
@@ -113,6 +143,7 @@ def run_persistence_self_schedule_baseline(
 
     metrics: dict[str, float | str | bool | None] = {
         "delivery_date": target_date.isoformat(),
+        "benchmark": UK_NAIVE_BASELINE_NAME,
         "baseline_method": forecast.method,
         "baseline_source_dates": ",".join(forecast.source_dates),
         "public_price_data": (
@@ -131,11 +162,30 @@ def run_persistence_self_schedule_baseline(
         "baseline_discharged_mwh": realized["discharged_mwh"],
         "baseline_equivalent_cycles": realized["equivalent_cycles"],
         "baseline_captured_spread_eur_mwh": realized["captured_spread_eur_mwh"],
+        "forecast_mae_eur_mwh": quality["mae_eur_mwh"],
+        "forecast_rmse_eur_mwh": quality["rmse_eur_mwh"],
+        "forecast_spread_direction_accuracy": quality["spread_direction_accuracy"],
+        "forecast_objective_net_revenue_eur": optimized.metrics["net_revenue_eur"],
+        "realized_net_revenue_eur": realized["net_revenue_eur"],
+        "capture_ratio_vs_oracle": oracle_capture,
+        "realized_charged_mwh": realized["charged_mwh"],
+        "realized_discharged_mwh": realized["discharged_mwh"],
+        "realized_equivalent_cycles": realized["equivalent_cycles"],
+        "realized_captured_spread_eur_mwh": realized["captured_spread_eur_mwh"],
     }
     return BaselineDispatch(forecast=forecast, schedule=optimized.schedule, metrics=metrics)
 
 
-def run_persistence_baseline_backtest(
+def run_persistence_self_schedule_baseline(
+    history: pd.DataFrame,
+    target_frame: pd.DataFrame,
+    battery_params: BatteryParams,
+) -> BaselineDispatch:
+    """Backward-compatible alias for the named UK naive self-schedule baseline."""
+    return run_uk_naive_self_schedule_baseline(history, target_frame, battery_params)
+
+
+def run_uk_naive_baseline_backtest(
     history: pd.DataFrame,
     start_date: date,
     end_date: date,
@@ -157,7 +207,7 @@ def run_persistence_baseline_backtest(
         ):
             continue
         rows.append(
-            run_persistence_self_schedule_baseline(
+            run_uk_naive_self_schedule_baseline(
                 frame,
                 target,
                 battery_params,
@@ -165,6 +215,23 @@ def run_persistence_baseline_backtest(
         )
 
     return pd.DataFrame(rows)
+
+
+def run_persistence_baseline_backtest(
+    history: pd.DataFrame,
+    start_date: date,
+    end_date: date,
+    battery_params: BatteryParams,
+    drop_synthetic_targets: bool = True,
+) -> pd.DataFrame:
+    """Backward-compatible alias for the named UK naive baseline backtest."""
+    return run_uk_naive_baseline_backtest(
+        history,
+        start_date,
+        end_date,
+        battery_params,
+        drop_synthetic_targets=drop_synthetic_targets,
+    )
 
 
 def _prior_public_history(history: pd.DataFrame, target_date: date) -> pd.DataFrame:

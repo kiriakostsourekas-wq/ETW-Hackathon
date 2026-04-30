@@ -17,6 +17,7 @@ class BatteryPreset:
     terminal_soc_pct: float
     degradation_cost_eur_mwh: float
     max_cycles_per_day: float | None
+    enforce_single_mode: bool = True
     note: str = ""
 
     @property
@@ -38,28 +39,41 @@ class BatteryPreset:
             terminal_soc_pct=self.terminal_soc_pct,
             degradation_cost_eur_mwh=self.degradation_cost_eur_mwh,
             max_cycles_per_day=self.max_cycles_per_day,
+            enforce_single_mode=self.enforce_single_mode,
         )
 
 
 METLEN_PRESET_NAME = "METLEN-scale 330 MW / 790 MWh"
+METLEN_POWER_MW = 330.0
+METLEN_CAPACITY_MWH = 790.0
 METLEN_BASE_EFFICIENCY = 0.85
 METLEN_OPTIMISTIC_EFFICIENCY = 0.90
+METLEN_MIN_SOC_PCT = 10.0
+METLEN_MAX_SOC_PCT = 90.0
+METLEN_INITIAL_SOC_PCT = 50.0
+METLEN_TERMINAL_SOC_PCT = 50.0
+METLEN_DEGRADATION_COST_EUR_MWH = 4.0
+METLEN_MAX_CYCLES_PER_DAY = 1.5
 METLEN_CYCLE_SENSITIVITIES = (0.5, 1.0, 1.5)
 METLEN_DEGRADATION_SENSITIVITIES = (0.0, 2.0, 5.0, 10.0, 20.0)
 
 BATTERY_PRESETS: dict[str, BatteryPreset] = {
     METLEN_PRESET_NAME: BatteryPreset(
         name=METLEN_PRESET_NAME,
-        power_mw=330.0,
-        capacity_mwh=790.0,
+        power_mw=METLEN_POWER_MW,
+        capacity_mwh=METLEN_CAPACITY_MWH,
         round_trip_efficiency=METLEN_BASE_EFFICIENCY,
-        min_soc_pct=10.0,
-        max_soc_pct=90.0,
-        initial_soc_pct=50.0,
-        terminal_soc_pct=50.0,
-        degradation_cost_eur_mwh=5.0,
-        max_cycles_per_day=1.0,
-        note="Public METLEN/Karatzis case; degradation remains a sensitivity.",
+        min_soc_pct=METLEN_MIN_SOC_PCT,
+        max_soc_pct=METLEN_MAX_SOC_PCT,
+        initial_soc_pct=METLEN_INITIAL_SOC_PCT,
+        terminal_soc_pct=METLEN_TERMINAL_SOC_PCT,
+        degradation_cost_eur_mwh=METLEN_DEGRADATION_COST_EUR_MWH,
+        max_cycles_per_day=METLEN_MAX_CYCLES_PER_DAY,
+        enforce_single_mode=True,
+        note=(
+            "Public METLEN/Karatzis scale with hackathon default operating assumptions; "
+            "cycle and degradation remain sensitivities."
+        ),
     ),
     "10 MW / 20 MWh": BatteryPreset(
         name="10 MW / 20 MWh",
@@ -98,4 +112,3 @@ BATTERY_PRESETS: dict[str, BatteryPreset] = {
         max_cycles_per_day=None,
     ),
 }
-

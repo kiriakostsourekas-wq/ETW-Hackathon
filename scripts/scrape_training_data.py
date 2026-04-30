@@ -83,11 +83,13 @@ def main() -> int:
                     "data_quality": quality,
                     "sources": bundle.sources,
                     "warnings": bundle.warnings,
+                    "optional_unavailable": bundle.optional_unavailable,
                 }
             )
             print(
                 f"{delivery_date}: ok, {len(bundle.sources)} source groups, "
-                f"{len(bundle.warnings)} warnings"
+                f"{len(bundle.warnings)} warnings, "
+                f"{len(bundle.optional_unavailable)} optional unavailable"
             )
         except Exception as exc:  # noqa: BLE001 - scraper should continue across bad days
             manifest.append(

@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from batteryhack.baseline import run_persistence_baseline_backtest
+from batteryhack.baseline import BASELINE_JOIN_COLUMNS, run_uk_naive_baseline_backtest
 from batteryhack.config import PROCESSED_DIR, ensure_data_dirs
 from batteryhack.presets import BATTERY_PRESETS, METLEN_PRESET_NAME
 from batteryhack.simulation import load_market_history
@@ -15,11 +15,13 @@ from batteryhack.simulation import load_market_history
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run the leakage-safe persistence self-schedule BESS baseline."
+        description=(
+            "Run the UK-style naive previous-day persistence BESS benchmark on Greek DAM data."
+        )
     )
     parser.add_argument("--history-start", default="2026-03-01")
-    parser.add_argument("--start", default="2026-04-22")
-    parser.add_argument("--end", default="2026-04-28")
+    parser.add_argument("--start", default="2026-03-22")
+    parser.add_argument("--end", default="2026-03-31")
     parser.add_argument(
         "--include-synthetic-targets",
         action="store_true",
@@ -32,7 +34,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="baseline_april_week_dispatch.csv",
+        default="uk_naive_baseline_dispatch.csv",
         help="CSV filename under data/processed.",
     )
     args = parser.parse_args()
@@ -48,13 +50,17 @@ def main() -> None:
         allow_synthetic=not args.no_synthetic,
     )
     params = BATTERY_PRESETS[METLEN_PRESET_NAME].to_params()
-    result = run_persistence_baseline_backtest(
+    result = run_uk_naive_baseline_backtest(
         history.frame,
         start,
         end,
         params,
         drop_synthetic_targets=not args.include_synthetic_targets,
     )
+    if not result.empty:
+        ordered_columns = [column for column in BASELINE_JOIN_COLUMNS if column in result.columns]
+        remaining_columns = [column for column in result.columns if column not in ordered_columns]
+        result = result[ordered_columns + remaining_columns]
 
     output_path = PROCESSED_DIR / args.output
     result.to_csv(output_path, index=False)
@@ -65,6 +71,15 @@ def main() -> None:
         print(f"Warnings: {len(history.warnings)}")
         for warning in history.warnings[:5]:
             print(f"- {warning}")
+    print(
+        "\nBatteryParams: "
+        f"{params.power_mw:g} MW / {params.capacity_mwh:g} MWh, "
+        f"RTE {params.round_trip_efficiency:.2f}, "
+        f"SoC {params.min_soc_pct:g}-{params.max_soc_pct:g}%, "
+        f"initial/terminal {params.initial_soc_pct:g}/{params.terminal_soc_pct:g}%, "
+        f"degradation {params.degradation_cost_eur_mwh:g} EUR/MWh throughput, "
+        f"cycle limit {params.max_cycles_per_day if params.max_cycles_per_day is not None else 'off'}"
+    )
 
     if result.empty:
         print("\nNo baseline rows generated.")
@@ -90,12 +105,13 @@ def main() -> None:
             result[
                 [
                     "delivery_date",
+                    "benchmark",
                     "baseline_method",
-                    "baseline_forecast_mae_eur_mwh",
-                    "baseline_realized_net_revenue_eur",
+                    "forecast_mae_eur_mwh",
+                    "realized_net_revenue_eur",
                     "oracle_net_revenue_eur",
-                    "baseline_capture_ratio_vs_oracle",
-                    "baseline_equivalent_cycles",
+                    "capture_ratio_vs_oracle",
+                    "realized_equivalent_cycles",
                 ]
             ]
             .round(3)

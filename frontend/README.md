@@ -39,17 +39,6 @@ cd frontend
 npm run build
 ```
 
-## Vercel
-
-The repo-level `vercel.json` builds this folder and serves `dist/`.
-
-When no live API is configured, Vercel serves `public/demo-dashboard.json` through `/api/dashboard`
-so the deployed dashboard remains functional. To use a hosted optimizer API instead, set:
-
-```text
-VITE_API_BASE=https://your-api-host.example
-```
-
 ## Structure
 
 - `src/App.jsx`: single maintained dashboard UI, including dashboard, optimization, battery health, and configuration views.

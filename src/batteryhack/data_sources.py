@@ -33,6 +33,18 @@ class MarketBundle:
     frame: pd.DataFrame
     sources: dict[str, str] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    optional_unavailable: list[str] = field(default_factory=list)
+
+
+SYNTHETIC_FILL_COLUMNS = (
+    "dam_price_eur_mwh",
+    "load_forecast_mw",
+    "res_forecast_mw",
+    "shortwave_radiation",
+    "cloud_cover",
+    "temperature_2m",
+    "wind_speed_10m",
+)
 
 
 def _numeric_values(row: Iterable[object], limit: int = MTUS_PER_DAY) -> list[float]:
@@ -504,6 +516,7 @@ def load_market_bundle(
     base = synthetic.day_index(delivery_date)
     sources: dict[str, str] = {}
     warnings: list[str] = []
+    optional_unavailable: list[str] = []
 
     try:
         prices, source = fetch_henex_prices(delivery_date)
@@ -535,7 +548,7 @@ def load_market_bundle(
             base = base.merge(extra, on=["timestamp", "interval"], how="left")
             sources[label] = source
         except Exception as exc:  # noqa: BLE001
-            warnings.append(str(exc))
+            optional_unavailable.append(f"{label}: {exc}")
 
     try:
         weather, source = fetch_open_meteo_weather(delivery_date)
@@ -549,9 +562,7 @@ def load_market_bundle(
     if missing_price and not allow_synthetic:
         raise DataSourceError("DAM prices unavailable and synthetic fallback disabled")
     if fill_synthetic_features:
-        for column in fallback.columns:
-            if column in ("timestamp", "interval"):
-                continue
+        for column in SYNTHETIC_FILL_COLUMNS:
             if column not in base.columns:
                 base[column] = fallback[column]
             else:
@@ -567,4 +578,9 @@ def load_market_bundle(
     if missing_price:
         sources["DAM prices"] = "Synthetic fallback generated from Greek load/RES price shape"
 
-    return MarketBundle(frame=base, sources=sources, warnings=warnings)
+    return MarketBundle(
+        frame=base,
+        sources=sources,
+        warnings=warnings,
+        optional_unavailable=optional_unavailable,
+    )

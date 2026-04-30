@@ -3,7 +3,7 @@ const API_BASE =
   (import.meta.env.DEV ? "http://127.0.0.1:8000" : window.location.origin);
 
 const DEMO_PAYLOAD_URL = "/demo-dashboard.json";
-const LIVE_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 60000);
+const LIVE_API_TIMEOUT_MS = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? 120000);
 
 export async function fetchDashboardData(params = {}) {
   try {
@@ -22,8 +22,12 @@ async function fetchLiveDashboard(params = {}) {
     power_mw: 330,
     capacity_mwh: 790,
     round_trip_efficiency: 0.85,
+    min_soc_pct: 10,
+    max_soc_pct: 90,
+    initial_soc_pct: 50,
+    terminal_soc_pct: 50,
     degradation_cost_eur_mwh: 4,
-    max_cycles_per_day: 1.5,
+    max_cycles_per_day: 1.0,
     forecast_history_days: 8,
     validation_days: 1,
     ...params,
@@ -63,7 +67,7 @@ async function fetchStaticDemoPayload(cause) {
     deployment_mode: "static-demo-fallback",
     warnings: [
       ...(payload.warnings ?? []),
-      "Using committed Vercel demo payload because the live optimizer API is unavailable.",
+      "Using committed demo payload because the live optimizer API is unavailable.",
     ],
   };
 }

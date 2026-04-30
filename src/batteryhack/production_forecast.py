@@ -238,6 +238,7 @@ def _build_registry(
         "eligible_feature_count": len(eligible_features),
         "used_feature_count": len(feature_columns),
         "used_features_are_live_safe": set(feature_columns).issubset(set(eligible_features)),
+        "optional_sources_unavailable": source_summary.get("optional_sources_unavailable", 0),
         "blocked_feature_examples": [
             "dam_price_eur_mwh",
             "actual_load_mw",

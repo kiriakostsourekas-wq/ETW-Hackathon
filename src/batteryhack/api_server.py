@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from math import isfinite
+from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
@@ -18,6 +19,8 @@ from .data_sources import load_market_bundle
 from .optimizer import BatteryParams, optimize_battery_schedule
 from .production_forecast import build_price_taker_forecast, registry_to_dict
 
+
+PROCESSED_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 
 DEFAULT_ASSET = BatteryParams(
     power_mw=330.0,
@@ -135,6 +138,226 @@ def _action_windows(series: pd.DataFrame) -> list[dict[str, Any]]:
     if active_kind and start_time and last_time:
         windows.append({"kind": active_kind, "start": start_time, "end": last_time})
     return windows
+
+
+def _load_json_artifact(processed_dir: Path, filename: str) -> tuple[Any | None, str | None]:
+    path = processed_dir / filename
+    if not path.exists():
+        return None, "missing"
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            return _json_safe(json.load(handle)), None
+    except Exception as exc:  # noqa: BLE001 - dashboard evidence is optional
+        return None, str(exc)
+
+
+def _load_csv_artifact(
+    processed_dir: Path,
+    filename: str,
+    max_rows: int = 12,
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    path = processed_dir / filename
+    if not path.exists():
+        return None, "missing"
+    try:
+        frame = pd.read_csv(path).head(max_rows)
+        return _records(frame), None
+    except Exception as exc:  # noqa: BLE001 - dashboard evidence is optional
+        return None, str(exc)
+
+
+def _load_cumulative_pnl_artifact(
+    processed_dir: Path,
+    filename: str = "strategy_comparison_daily.csv",
+    ml_strategy: str = "ml_scarcity_ensemble",
+    baseline_strategy: str = "uk_naive_baseline",
+) -> tuple[list[dict[str, Any]] | None, str | None]:
+    path = processed_dir / filename
+    if not path.exists():
+        return None, "missing"
+    try:
+        frame = pd.read_csv(path)
+        required = {"delivery_date", "strategy", "realized_net_revenue_eur"}
+        missing_columns = required - set(frame.columns)
+        if missing_columns:
+            return None, f"missing columns: {', '.join(sorted(missing_columns))}"
+
+        daily = frame[["delivery_date", "strategy", "realized_net_revenue_eur"]].copy()
+        daily["realized_net_revenue_eur"] = pd.to_numeric(
+            daily["realized_net_revenue_eur"],
+            errors="coerce",
+        )
+
+        ml_daily = (
+            daily[daily["strategy"] == ml_strategy]
+            .groupby("delivery_date", as_index=False)["realized_net_revenue_eur"]
+            .sum()
+            .rename(columns={"realized_net_revenue_eur": "ml_daily_pnl_eur"})
+        )
+        baseline_daily = (
+            daily[daily["strategy"] == baseline_strategy]
+            .groupby("delivery_date", as_index=False)["realized_net_revenue_eur"]
+            .sum()
+            .rename(columns={"realized_net_revenue_eur": "baseline_daily_pnl_eur"})
+        )
+        cumulative = ml_daily.merge(baseline_daily, on="delivery_date", how="inner").sort_values(
+            "delivery_date"
+        )
+        if cumulative.empty:
+            return [], None
+
+        cumulative["ml_cumulative_pnl_eur"] = cumulative["ml_daily_pnl_eur"].cumsum()
+        cumulative["baseline_cumulative_pnl_eur"] = cumulative[
+            "baseline_daily_pnl_eur"
+        ].cumsum()
+        cumulative["daily_uplift_eur"] = (
+            cumulative["ml_daily_pnl_eur"] - cumulative["baseline_daily_pnl_eur"]
+        )
+        cumulative["cumulative_uplift_eur"] = cumulative["daily_uplift_eur"].cumsum()
+
+        columns = [
+            "delivery_date",
+            "ml_daily_pnl_eur",
+            "baseline_daily_pnl_eur",
+            "ml_cumulative_pnl_eur",
+            "baseline_cumulative_pnl_eur",
+            "daily_uplift_eur",
+            "cumulative_uplift_eur",
+        ]
+        return _records(cumulative[columns].round(2)), None
+    except Exception as exc:  # noqa: BLE001 - dashboard evidence is optional
+        return None, str(exc)
+
+
+def _compact_future_market_impact(
+    headline: dict[str, Any] | None,
+    strategy_headline: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    if not headline:
+        return None
+
+    rows = headline.get("rows") or []
+    available_models = [
+        str(row.get("strategy_model")) for row in rows if row.get("strategy_model")
+    ]
+    preferred_candidates = [
+        strategy_headline.get("best_ml_strategy") if strategy_headline else None,
+        "ml_scarcity_ensemble",
+        available_models[0] if available_models else None,
+    ]
+    preferred_model = next(
+        (candidate for candidate in preferred_candidates if candidate in available_models),
+        None,
+    )
+    if preferred_model is None:
+        return None
+    selected_rows = [row for row in rows if row.get("strategy_model") == preferred_model]
+
+    scenario_order = {"conservative": 0, "base": 1, "aggressive": 2}
+    scenarios = sorted(
+        [
+            {
+                "scenario": row.get("scenario"),
+                "fixed_schedule_degradation_pct": row.get("fixed_schedule_degradation_pct"),
+                "reoptimized_degradation_pct": row.get("reoptimized_degradation_pct"),
+                "reoptimization_recovery_eur": row.get("reoptimization_recovery_eur"),
+                "interpretation_label": row.get("interpretation_label"),
+                "sample_days": row.get("sample_days"),
+            }
+            for row in selected_rows
+            if row.get("scenario") in scenario_order
+        ],
+        key=lambda row: scenario_order.get(str(row.get("scenario")), 99),
+    )
+
+    return _json_safe(
+        {
+            "generated_at": headline.get("generated_at"),
+            "notice": headline.get(
+                "notice",
+                "Strategic spread-compression stress test only; not a Greek price forecast.",
+            ),
+            "strategy_model": preferred_model,
+            "scenarios": scenarios,
+            "available_models": sorted(set(available_models)),
+        }
+    )
+
+
+def _evidence_payload(processed_dir: Path | None = None) -> dict[str, Any]:
+    processed_dir = processed_dir or PROCESSED_DATA_DIR
+    missing: list[str] = []
+    errors: dict[str, str] = {}
+
+    def remember(filename: str, error: str | None) -> None:
+        if error == "missing":
+            missing.append(filename)
+        elif error:
+            errors[filename] = error
+
+    strategy_headline, error = _load_json_artifact(
+        processed_dir,
+        "strategy_comparison_headline.json",
+    )
+    remember("strategy_comparison_headline.json", error)
+    strategy_summary, error = _load_csv_artifact(
+        processed_dir,
+        "strategy_comparison_summary.csv",
+    )
+    remember("strategy_comparison_summary.csv", error)
+    cumulative_pnl, error = _load_cumulative_pnl_artifact(processed_dir)
+    remember("strategy_comparison_daily.csv", error)
+    model_stability, error = _load_csv_artifact(
+        processed_dir,
+        "ml_research_model_stability.csv",
+    )
+    remember("ml_research_model_stability.csv", error)
+    paired_uplift, error = _load_csv_artifact(
+        processed_dir,
+        "ml_research_paired_uplift.csv",
+    )
+    remember("ml_research_paired_uplift.csv", error)
+    future_headline, error = _load_json_artifact(
+        processed_dir,
+        "future_market_impact_headline.json",
+    )
+    remember("future_market_impact_headline.json", error)
+
+    evidence: dict[str, Any] = {
+        "available": False,
+        "partial": False,
+        "missing_artifacts": missing,
+        "artifact_errors": errors,
+    }
+
+    if strategy_headline or strategy_summary or cumulative_pnl:
+        evidence["strategy_comparison"] = {
+            "headline": strategy_headline,
+            "summary": strategy_summary or [],
+            "cumulative_pnl": cumulative_pnl or [],
+        }
+    if model_stability:
+        evidence["model_stability"] = model_stability
+    if paired_uplift:
+        evidence["paired_uplift"] = paired_uplift
+
+    compact_future = _compact_future_market_impact(future_headline, strategy_headline)
+    if compact_future:
+        evidence["future_market_impact"] = compact_future
+
+    available_sections = [
+        key
+        for key in (
+            "strategy_comparison",
+            "model_stability",
+            "paired_uplift",
+            "future_market_impact",
+        )
+        if key in evidence
+    ]
+    evidence["available"] = bool(available_sections)
+    evidence["partial"] = bool(available_sections and (missing or errors))
+    return _json_safe(evidence)
 
 
 def build_dashboard_payload(
@@ -301,9 +524,11 @@ def build_dashboard_payload(
         "data_quality": "public DAM price data" if public_price else "synthetic price fallback",
         "sources": bundle.sources,
         "warnings": bundle.warnings,
+        "optional_unavailable": bundle.optional_unavailable,
         "optimizer_status": output.status,
         "metrics": metrics,
         "forecasting": forecasting,
+        "evidence": _evidence_payload(),
         "kpis": kpis,
         "windows": _action_windows(series[["time", "charge_mw", "discharge_mw"]]),
         "series": rows,
@@ -408,6 +633,8 @@ def _json_safe(value: Any) -> Any:
         return [_json_safe(item) for item in value]
     if isinstance(value, (np.integer,)):
         return int(value)
+    if isinstance(value, (np.bool_,)):
+        return bool(value)
     if isinstance(value, (np.floating, float)):
         return float(value) if np.isfinite(value) else None
     if isinstance(value, pd.Timestamp):

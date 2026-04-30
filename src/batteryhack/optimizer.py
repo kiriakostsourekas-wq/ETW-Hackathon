@@ -31,6 +31,25 @@ class OptimizationOutput:
     status: str
 
 
+def _validate_battery_params(params: BatteryParams, dt_hours: float) -> None:
+    if params.power_mw <= 0 or params.capacity_mwh <= 0:
+        raise ValueError("power_mw and capacity_mwh must be positive")
+    if not 0 < params.round_trip_efficiency <= 1:
+        raise ValueError("round_trip_efficiency must be in (0, 1]")
+    if not 0 <= params.min_soc_pct < params.max_soc_pct <= 100:
+        raise ValueError("min_soc_pct and max_soc_pct must satisfy 0 <= min < max <= 100")
+    if not params.min_soc_pct <= params.initial_soc_pct <= params.max_soc_pct:
+        raise ValueError("initial_soc_pct must be within the min/max SoC band")
+    if not params.min_soc_pct <= params.terminal_soc_pct <= params.max_soc_pct:
+        raise ValueError("terminal_soc_pct must be within the min/max SoC band")
+    if params.degradation_cost_eur_mwh < 0:
+        raise ValueError("degradation_cost_eur_mwh must be non-negative")
+    if params.max_cycles_per_day is not None and params.max_cycles_per_day < 0:
+        raise ValueError("max_cycles_per_day must be non-negative when provided")
+    if dt_hours <= 0:
+        raise ValueError("dt_hours must be positive")
+
+
 def optimize_battery_schedule(
     market: pd.DataFrame,
     params: BatteryParams,
@@ -38,12 +57,11 @@ def optimize_battery_schedule(
     dt_hours: float = MTU_HOURS,
 ) -> OptimizationOutput:
     prices = pd.to_numeric(market[price_col], errors="coerce").to_numpy(dtype=float)
+    if len(prices) == 0:
+        raise ValueError("market must contain at least one interval")
     if np.isnan(prices).any():
         raise ValueError(f"{price_col} contains missing or non-numeric values")
-    if params.power_mw <= 0 or params.capacity_mwh <= 0:
-        raise ValueError("power_mw and capacity_mwh must be positive")
-    if not 0 < params.round_trip_efficiency <= 1:
-        raise ValueError("round_trip_efficiency must be in (0, 1]")
+    _validate_battery_params(params, dt_hours)
 
     n = len(prices)
     charge_start = 0
