@@ -15,12 +15,13 @@ import numpy as np
 import pandas as pd
 
 from .config import DEFAULT_DEMO_DATE, MTU_HOURS
-from .data_sources import load_market_bundle
+from .data_sources import MarketBundle, load_market_bundle
 from .optimizer import BatteryParams, optimize_battery_schedule
 from .production_forecast import build_price_taker_forecast, registry_to_dict
 
 
 PROCESSED_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+LOCAL_MARKET_DATASET = "greek_dam_training_dataset.csv"
 
 DEFAULT_ASSET = BatteryParams(
     power_mw=330.0,
@@ -103,6 +104,32 @@ def _params_from_query(query: dict[str, list[str]]) -> BatteryParams:
             "max_cycles_per_day",
             DEFAULT_ASSET.max_cycles_per_day,
         ),
+    )
+
+
+def _load_local_market_bundle(delivery_date: date) -> MarketBundle | None:
+    path = PROCESSED_DATA_DIR / LOCAL_MARKET_DATASET
+    if not path.exists():
+        return None
+
+    frame = pd.read_csv(path, parse_dates=["timestamp"])
+    if "delivery_date" in frame.columns:
+        day = frame[frame["delivery_date"].astype(str) == delivery_date.isoformat()].copy()
+    else:
+        day = frame[frame["timestamp"].dt.date == delivery_date].copy()
+    if day.empty:
+        return None
+
+    day = day.sort_values("timestamp").reset_index(drop=True)
+    return MarketBundle(
+        frame=day,
+        sources={
+            "DAM prices": f"cached public dataset: data/processed/{LOCAL_MARKET_DATASET}",
+            "load_forecast_mw": f"cached public dataset: data/processed/{LOCAL_MARKET_DATASET}",
+            "res_forecast_mw": f"cached public dataset: data/processed/{LOCAL_MARKET_DATASET}",
+        },
+        warnings=[],
+        optional_unavailable=[],
     )
 
 
@@ -367,7 +394,7 @@ def build_dashboard_payload(
     forecast_history_days: int = 21,
     validation_days: int = 3,
 ) -> dict[str, Any]:
-    bundle = load_market_bundle(delivery_date)
+    bundle = _load_local_market_bundle(delivery_date) or load_market_bundle(delivery_date)
     market = bundle.frame.copy()
     market["timestamp"] = pd.to_datetime(market["timestamp"])
     market["net_load_mw"] = market["load_forecast_mw"] - market["res_forecast_mw"]
@@ -403,7 +430,10 @@ def build_dashboard_payload(
     avg_price = float(series["dam_price_eur_mwh"].mean())
     charge_intervals = int((series["charge_mw"] > 1e-4).sum())
     discharge_intervals = int((series["discharge_mw"] > 1e-4).sum())
-    public_price = bundle.sources.get("DAM prices", "").startswith("https://")
+    public_price = bool(bundle.sources.get("DAM prices", "").startswith("https://") or (
+        "data_quality" in series.columns
+        and series["data_quality"].astype(str).str.contains("public price data").any()
+    ))
 
     metrics = {
         **{key: _round(value, 2) for key, value in output.metrics.items()},
@@ -675,7 +705,7 @@ class DashboardRequestHandler(BaseHTTPRequestHandler):
                 return
 
             if parsed.path == "/api/dashboard":
-                include_forecast = query.get("include_forecast", ["true"])[0].lower() != "false"
+                include_forecast = query.get("include_forecast", ["false"])[0].lower() != "false"
                 payload = build_dashboard_payload(
                     delivery_date=_parse_date(query.get("date", [None])[0]),
                     params=_params_from_query(query),

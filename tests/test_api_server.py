@@ -56,7 +56,7 @@ def test_dashboard_payload_includes_processed_evidence(monkeypatch, tmp_path):
                 "best_ml_strategy": "ml_scarcity_ensemble",
                 "ml_total_pnl_eur": 2878632.17,
                 "uk_baseline_total_pnl_eur": 2571165.35,
-                "uplift_eur": 307466.83,
+                "uplift_eur": 65.0,
                 "uplift_pct": 0.1196,
                 "win_rate_vs_uk_baseline": 0.7368,
             }
@@ -146,10 +146,19 @@ def test_dashboard_payload_includes_processed_evidence(monkeypatch, tmp_path):
     assert len(evidence["strategy_comparison"]["summary"]) == 2
     cumulative_pnl = evidence["strategy_comparison"]["cumulative_pnl"]
     assert len(cumulative_pnl) == 2
+    assert {
+        "delivery_date",
+        "ml_daily_pnl_eur",
+        "baseline_daily_pnl_eur",
+        "ml_cumulative_pnl_eur",
+        "baseline_cumulative_pnl_eur",
+        "daily_uplift_eur",
+        "cumulative_uplift_eur",
+    }.issubset(cumulative_pnl[0])
     assert cumulative_pnl[0]["baseline_daily_pnl_eur"] == 75
     assert cumulative_pnl[-1]["ml_cumulative_pnl_eur"] == 220
     assert cumulative_pnl[-1]["baseline_cumulative_pnl_eur"] == 155
-    assert cumulative_pnl[-1]["cumulative_uplift_eur"] == 65
+    assert cumulative_pnl[-1]["cumulative_uplift_eur"] == evidence["strategy_comparison"]["headline"]["uplift_eur"]
     assert evidence["model_stability"][0]["winning_model"] == "ridge"
     assert evidence["paired_uplift"][0]["primary_win_days"] == 14
     assert evidence["future_market_impact"]["notice"].endswith("not a Greek price forecast.")

@@ -27,13 +27,10 @@ battery constraints. The UK naive baseline remains a practical fallback benchmar
 implemented with yesterday's public Greek DAM price shape, and it is the benchmark we must beat.
 
 Ridge remains the simple model baseline/challenger, not the final champion.
-Conservative scarcity mode is experimental and should not be used as the
-headline even when it is close to, or slightly above, the standard ensemble on
-this sample.
 
-## Run After Agent 1 Outputs Exist
+## Reproduce The Comparison
 
-Agent 1 should first create the validated scarcity artifact set:
+First create the validated scarcity artifact set:
 
 - `data/processed/ml_research_scarcity_daily.csv`
 - `data/processed/ml_research_scarcity_predictions.csv` when interval-level comparison is wanted
@@ -46,7 +43,7 @@ PYTHONPATH=src python scripts/run_ml_research.py \
   --start 2026-03-22 \
   --end 2026-04-29 \
   --min-train-days 14 \
-  --models ridge,scarcity_ensemble,scarcity_ensemble_conservative \
+  --models ridge,scarcity_ensemble \
   --summary-output ml_research_scarcity_summary.csv \
   --daily-output ml_research_scarcity_daily.csv \
   --predictions-output ml_research_scarcity_predictions.csv \
@@ -56,9 +53,6 @@ PYTHONPATH=src python scripts/run_ml_research.py \
   --model-stability-output ml_research_scarcity_model_stability.csv \
   --paired-uplift-output ml_research_scarcity_paired_uplift.csv
 ```
-
-`scarcity_ensemble_conservative` is kept as an experimental risk-control
-comparison and must not be selected as the headline.
 
 Then build the strategy comparison with:
 
@@ -71,8 +65,8 @@ PYTHONPATH=src python scripts/run_strategy_comparison.py \
 
 By default the script:
 
-- reads the requested Agent 1 daily ML rows from `data/processed/`,
-- reads the requested Agent 1 interval predictions when present,
+- reads the requested daily ML rows from `data/processed/`,
+- reads the requested interval ML predictions when present,
 - runs the UK naive baseline on the same Greek delivery-date window,
 - uses `BATTERY_PRESETS[METLEN_PRESET_NAME].to_params()` for the baseline battery assumptions,
 - writes the comparison outputs under `data/processed/`.
@@ -93,7 +87,7 @@ PYTHONPATH=src python scripts/validate_research_outputs.py
 This validator is intentionally strict. It fails if required processed artifacts are missing,
 if the headline does not reconcile with the strategy summary, if the UK baseline method rows
 are not aggregated, if date windows mismatch, if the official headline is not
-`scarcity_ensemble`, or if `scarcity_ensemble_conservative` is selected as the headline.
+`scarcity_ensemble`, or if an experimental variant is selected as the headline.
 When `future_market_impact_headline.json` exists, validation also requires that it was built
 from `data/processed/strategy_comparison_intervals.csv`, contains `ml_scarcity_ensemble`, and
 has conservative, base, and aggressive scenarios over the same 38 evaluated days. It warns, but

@@ -243,6 +243,30 @@ def test_scarcity_weights_ignore_target_day_actual_prices() -> None:
     assert all(pd.Timestamp(day).date() < target_date for day in validation_dates)
 
 
+def test_optional_xgboost_candidate_and_ensemble_run_when_installed() -> None:
+    if importlib.util.find_spec("xgboost") is None:
+        return
+
+    result = run_ml_research_backtest(
+        _history(8),
+        date(2026, 3, 7),
+        date(2026, 3, 7),
+        battery_params=_params(),
+        min_train_days=5,
+        model_candidates=("xgboost", "scarcity_ensemble_xgboost"),
+    )
+
+    assert set(result.daily["model"]) == {"xgboost", "scarcity_ensemble_xgboost"}
+    assert result.summary["mae_eur_mwh"].notna().all()
+    ensemble_daily = result.daily[result.daily["model"] == "scarcity_ensemble_xgboost"]
+    assert ensemble_daily["scarcity_weights"].str.contains("xgboost=").all()
+    ensemble_predictions = result.predictions[
+        result.predictions["model"] == "scarcity_ensemble_xgboost"
+    ]
+    assert "base_forecast_xgboost_eur_mwh" in ensemble_predictions.columns
+    assert "weight_xgboost" in ensemble_predictions.columns
+
+
 def test_cli_pairing_defaults_to_run_winner_and_requires_explicit_full_uk_path(tmp_path) -> None:
     daily = pd.DataFrame(
         {

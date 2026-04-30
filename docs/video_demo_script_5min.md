@@ -19,8 +19,8 @@ Use the local UI:
 - Evidence page for ML versus UK naive baseline.
 - Details page only if you need to show adjustable battery parameters.
 
-If Agent 4's animated cumulative PnL chart is available, use it on the Evidence
-page as the main proof visual. If not, use the total comparison card.
+Use the animated cumulative PnL chart on the Evidence page as the main proof
+visual.
 
 ## Timeline And Script
 
@@ -179,24 +179,3 @@ Final sentence:
 > The result is not just a price forecast. It is a battery operating strategy
 > that is feasible today and designed to adapt as the Greek storage market
 > matures.
-
-## Lines To Avoid
-
-- Do not say we trained on Greek BESS telemetry.
-- Do not say oracle is the benchmark.
-- Do not say future scenarios are Greek price forecasts.
-- Do not say Ridge is the final model.
-- Do not say the uplift is guaranteed out of sample.
-- Do not imply live daily parameter changes regenerate the 38-day evidence.
-
-## Must-Show Checklist
-
-- Live dispatch PnL.
-- Price plus charge/discharge action graph.
-- Battery health constraints and adjustable parameters.
-- Evidence headline: EUR 2.968M vs EUR 2.571M.
-- Uplift: EUR 397k / 15.45%.
-- Win rate: 78.9%.
-- Cumulative PnL chart if available.
-- Future stress test disclaimer: stress test, not forecast.
-

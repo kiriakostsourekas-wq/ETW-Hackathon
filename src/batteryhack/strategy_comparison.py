@@ -212,7 +212,7 @@ def build_uk_naive_baseline_intervals(
 
 
 def normalize_ml_daily(frame: pd.DataFrame) -> pd.DataFrame:
-    """Normalize Agent 1 daily ML output into the comparison daily schema."""
+    """Normalize daily ML output into the comparison daily schema."""
     if frame is None or frame.empty:
         return pd.DataFrame(columns=DAILY_OUTPUT_SCHEMA)
     _require_columns(frame, {"delivery_date", "model"}, "ml_daily")

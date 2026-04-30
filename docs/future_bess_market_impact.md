@@ -99,7 +99,7 @@ literature and Spain/GB/Italy analogues. They are not observed Greek outcomes.
 
 ## Input Contract
 
-The preferred final input from Agent 1/2 is:
+The preferred final input is:
 
 `data/processed/strategy_comparison_intervals.csv`
 
@@ -225,14 +225,11 @@ label distribution. A forecast model trained on pre-storage or early-storage pri
 shapes can overstate future evening peaks, understate midday floors, and allocate
 cycles to windows that no longer clear after the fleet responds.
 
-Presentation paragraph: the final pitch should lead with the scarcity-aware
-ensemble plus optimizer beating the UK naive baseline, with Ridge positioned as a
-simple challenger and conservative scarcity mode as experimental. Then use this
-future-risk layer to explain how the strategy stays useful after Greece adds more
-BESS. The operating loop is to retrain forecasts as storage penetration changes,
-rerun the optimizer under updated spread and depth conditions, and use scenario
-stress tests before committing to strategies that only work on today's spreads.
-This is a disciplined risk screen for BESS buildout, not a Greek price forecast.
+Strategic use: the operating loop is to retrain forecasts as storage penetration
+changes, rerun the optimizer under updated spread and depth conditions, and use
+scenario stress tests before committing to strategies that only work on today's
+spreads. This is a disciplined risk screen for BESS buildout, not a Greek price
+forecast.
 
 ## Limitations
 

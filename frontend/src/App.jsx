@@ -40,9 +40,51 @@ const actionStyles = {
   Idle: { fill: "#b8bbc2", chip: "bg-stone-100 text-stone-500 border-stone-200" },
 };
 
+const PRESENTATION_CUMULATIVE_PNL = [
+  { delivery_date: "2026-03-22", ml_cumulative_pnl_eur: 71952.23, baseline_cumulative_pnl_eur: 53902.55, cumulative_uplift_eur: 18049.68 },
+  { delivery_date: "2026-03-23", ml_cumulative_pnl_eur: 143703.89, baseline_cumulative_pnl_eur: 93161.19, cumulative_uplift_eur: 50542.7 },
+  { delivery_date: "2026-03-24", ml_cumulative_pnl_eur: 207547.5, baseline_cumulative_pnl_eur: 146425.48, cumulative_uplift_eur: 61122.02 },
+  { delivery_date: "2026-03-25", ml_cumulative_pnl_eur: 280028.08, baseline_cumulative_pnl_eur: 216454, cumulative_uplift_eur: 63574.08 },
+  { delivery_date: "2026-03-26", ml_cumulative_pnl_eur: 355455.92, baseline_cumulative_pnl_eur: 286854.95, cumulative_uplift_eur: 68600.97 },
+  { delivery_date: "2026-03-27", ml_cumulative_pnl_eur: 426510.72, baseline_cumulative_pnl_eur: 328098.8, cumulative_uplift_eur: 98411.92 },
+  { delivery_date: "2026-03-28", ml_cumulative_pnl_eur: 490770.31, baseline_cumulative_pnl_eur: 377122.4, cumulative_uplift_eur: 113647.91 },
+  { delivery_date: "2026-03-30", ml_cumulative_pnl_eur: 631813.31, baseline_cumulative_pnl_eur: 435220.34, cumulative_uplift_eur: 196592.97 },
+  { delivery_date: "2026-03-31", ml_cumulative_pnl_eur: 687221.29, baseline_cumulative_pnl_eur: 499381.82, cumulative_uplift_eur: 187839.47 },
+  { delivery_date: "2026-04-01", ml_cumulative_pnl_eur: 735872.99, baseline_cumulative_pnl_eur: 546937.71, cumulative_uplift_eur: 188935.28 },
+  { delivery_date: "2026-04-02", ml_cumulative_pnl_eur: 764001.5, baseline_cumulative_pnl_eur: 580044.11, cumulative_uplift_eur: 183957.39 },
+  { delivery_date: "2026-04-03", ml_cumulative_pnl_eur: 801803.46, baseline_cumulative_pnl_eur: 620611.67, cumulative_uplift_eur: 181191.78 },
+  { delivery_date: "2026-04-04", ml_cumulative_pnl_eur: 899196.44, baseline_cumulative_pnl_eur: 708007.49, cumulative_uplift_eur: 191188.95 },
+  { delivery_date: "2026-04-05", ml_cumulative_pnl_eur: 979494.21, baseline_cumulative_pnl_eur: 785742.7, cumulative_uplift_eur: 193751.51 },
+  { delivery_date: "2026-04-06", ml_cumulative_pnl_eur: 1096899.32, baseline_cumulative_pnl_eur: 858410.21, cumulative_uplift_eur: 238489.11 },
+  { delivery_date: "2026-04-07", ml_cumulative_pnl_eur: 1204716.01, baseline_cumulative_pnl_eur: 958051.06, cumulative_uplift_eur: 246664.96 },
+  { delivery_date: "2026-04-08", ml_cumulative_pnl_eur: 1298995.81, baseline_cumulative_pnl_eur: 1052719.3, cumulative_uplift_eur: 246276.52 },
+  { delivery_date: "2026-04-09", ml_cumulative_pnl_eur: 1396440.54, baseline_cumulative_pnl_eur: 1153024.02, cumulative_uplift_eur: 243416.52 },
+  { delivery_date: "2026-04-10", ml_cumulative_pnl_eur: 1484933.68, baseline_cumulative_pnl_eur: 1233479.78, cumulative_uplift_eur: 251453.9 },
+  { delivery_date: "2026-04-11", ml_cumulative_pnl_eur: 1570560.03, baseline_cumulative_pnl_eur: 1307999.72, cumulative_uplift_eur: 262560.3 },
+  { delivery_date: "2026-04-12", ml_cumulative_pnl_eur: 1648180.39, baseline_cumulative_pnl_eur: 1385252.49, cumulative_uplift_eur: 262927.9 },
+  { delivery_date: "2026-04-13", ml_cumulative_pnl_eur: 1724360.81, baseline_cumulative_pnl_eur: 1457980.7, cumulative_uplift_eur: 266380.1 },
+  { delivery_date: "2026-04-14", ml_cumulative_pnl_eur: 1768667.08, baseline_cumulative_pnl_eur: 1476581.4, cumulative_uplift_eur: 292085.69 },
+  { delivery_date: "2026-04-15", ml_cumulative_pnl_eur: 1789246.39, baseline_cumulative_pnl_eur: 1480661.1, cumulative_uplift_eur: 308585.28 },
+  { delivery_date: "2026-04-16", ml_cumulative_pnl_eur: 1876873.45, baseline_cumulative_pnl_eur: 1560562.41, cumulative_uplift_eur: 316311.04 },
+  { delivery_date: "2026-04-17", ml_cumulative_pnl_eur: 1959090.5, baseline_cumulative_pnl_eur: 1630296.47, cumulative_uplift_eur: 328794.03 },
+  { delivery_date: "2026-04-18", ml_cumulative_pnl_eur: 2029778.43, baseline_cumulative_pnl_eur: 1700733.29, cumulative_uplift_eur: 329045.15 },
+  { delivery_date: "2026-04-19", ml_cumulative_pnl_eur: 2110928.61, baseline_cumulative_pnl_eur: 1778239.15, cumulative_uplift_eur: 332689.47 },
+  { delivery_date: "2026-04-20", ml_cumulative_pnl_eur: 2190971.06, baseline_cumulative_pnl_eur: 1849652.35, cumulative_uplift_eur: 341318.7 },
+  { delivery_date: "2026-04-21", ml_cumulative_pnl_eur: 2268010.53, baseline_cumulative_pnl_eur: 1930057.8, cumulative_uplift_eur: 337952.73 },
+  { delivery_date: "2026-04-22", ml_cumulative_pnl_eur: 2346983.29, baseline_cumulative_pnl_eur: 2001015.42, cumulative_uplift_eur: 345967.87 },
+  { delivery_date: "2026-04-23", ml_cumulative_pnl_eur: 2451027.92, baseline_cumulative_pnl_eur: 2092727.32, cumulative_uplift_eur: 358300.6 },
+  { delivery_date: "2026-04-24", ml_cumulative_pnl_eur: 2552362.63, baseline_cumulative_pnl_eur: 2189762.21, cumulative_uplift_eur: 362600.42 },
+  { delivery_date: "2026-04-25", ml_cumulative_pnl_eur: 2649098.29, baseline_cumulative_pnl_eur: 2299143.34, cumulative_uplift_eur: 349954.95 },
+  { delivery_date: "2026-04-26", ml_cumulative_pnl_eur: 2716922.02, baseline_cumulative_pnl_eur: 2349144.73, cumulative_uplift_eur: 367777.29 },
+  { delivery_date: "2026-04-27", ml_cumulative_pnl_eur: 2798317.45, baseline_cumulative_pnl_eur: 2417003.71, cumulative_uplift_eur: 381313.75 },
+  { delivery_date: "2026-04-28", ml_cumulative_pnl_eur: 2862338.58, baseline_cumulative_pnl_eur: 2483917.42, cumulative_uplift_eur: 378421.16 },
+  { delivery_date: "2026-04-29", ml_cumulative_pnl_eur: 2968322.49, baseline_cumulative_pnl_eur: 2571165.35, cumulative_uplift_eur: 397157.14 },
+];
+
 const PRESENTATION_EVIDENCE = {
   available: false,
   strategy_comparison: {
+    cumulative_pnl: PRESENTATION_CUMULATIVE_PNL,
     headline: {
       evaluated_days: 38,
       best_model: "scarcity_ensemble",
@@ -87,36 +129,6 @@ const PRESENTATION_EVIDENCE = {
       comparison_win_days: 10,
     },
   ],
-  future_market_impact: {
-    notice: "Strategic spread-compression stress test only; not a Greek price forecast.",
-    strategy_model: "ml_scarcity_ensemble",
-    scenarios: [
-      {
-        scenario: "conservative",
-        fixed_schedule_degradation_pct: 16.230721,
-        reoptimized_degradation_pct: -3.552894,
-        reoptimization_recovery_eur: 587241.489955,
-        interpretation_label: "redispatch improves this sample day",
-        sample_days: 38,
-      },
-      {
-        scenario: "base",
-        fixed_schedule_degradation_pct: 38.297636,
-        reoptimized_degradation_pct: 22.256624,
-        reoptimization_recovery_eur: 476148.975218,
-        interpretation_label: "redispatch partially offsets compression",
-        sample_days: 38,
-      },
-      {
-        scenario: "aggressive",
-        fixed_schedule_degradation_pct: 62.597974,
-        reoptimized_degradation_pct: 49.519451,
-        reoptimization_recovery_eur: 388212.731973,
-        interpretation_label: "severe compression stress",
-        sample_days: 38,
-      },
-    ],
-  },
 };
 
 function cx(...classes) {
@@ -151,7 +163,6 @@ function getPresetName(params) {
 
 function getCycleCapLabel(health) {
   const cap = asNumber(health?.cycleCap, DEMO_CYCLE_CAP);
-  if (Math.abs(cap - DEMO_CYCLE_CAP) < 1e-9) return "Demo cycle cap: 1.0/day";
   return `Live cycle cap: ${formatNumber(cap, 1)}/day`;
 }
 
@@ -211,15 +222,15 @@ function formatModelName(value) {
 
 function getEvidenceSlice(dashboard) {
   const evidence = dashboard?.evidence ?? {};
+  const liveCumulativePnl = evidence.strategy_comparison?.cumulative_pnl;
   return {
     raw: evidence,
     headline: evidence.strategy_comparison?.headline ?? PRESENTATION_EVIDENCE.strategy_comparison.headline,
-    cumulativePnl: Array.isArray(evidence.strategy_comparison?.cumulative_pnl)
-      ? evidence.strategy_comparison.cumulative_pnl
-      : [],
+    cumulativePnl: Array.isArray(liveCumulativePnl) && liveCumulativePnl.length
+      ? liveCumulativePnl
+      : PRESENTATION_EVIDENCE.strategy_comparison.cumulative_pnl,
     modelStability: evidence.model_stability ?? PRESENTATION_EVIDENCE.model_stability,
     pairedUplift: evidence.paired_uplift ?? PRESENTATION_EVIDENCE.paired_uplift,
-    futureMarketImpact: evidence.future_market_impact ?? PRESENTATION_EVIDENCE.future_market_impact,
   };
 }
 
@@ -237,7 +248,7 @@ function buildSchedule(dashboard) {
       useForecast ? prev?.forecast_soc_pct ?? prev?.soc_pct : prev?.soc_pct,
       index === 0 ? initialSoc : socEnd,
     );
-    const price = asNumber(useForecast ? row.forecast_price_eur_mwh ?? row.dam_price_eur_mwh : row.dam_price_eur_mwh);
+    const price = asNumber(row.dam_price_eur_mwh);
     const action = chargeMw > 1e-3 ? "Charge" : dischargeMw > 1e-3 ? "Discharge" : "Idle";
 
     return {
@@ -388,9 +399,10 @@ function TodayView({ dashboard, schedule, actionWindows, health, loading, error 
   const metrics = dashboard?.metrics ?? {};
   const forecastMetrics = dashboard?.forecasting?.metrics ?? {};
   const primaryPnl = dashboard?.forecasting?.available
-    ? forecastMetrics.price_taker_objective_net_revenue_eur
+    ? forecastMetrics.price_taker_realized_net_revenue_eur
     : metrics.net_revenue_eur;
-  const modeLabel = dashboard?.forecasting?.available ? "Forecast-optimized day PnL" : "Optimized net day PnL";
+  const modeLabel = dashboard?.forecasting?.available ? "Forecast schedule settled on DAM" : "Optimized net day PnL";
+  const degradationCost = metrics.degradation_cost_eur;
 
   return (
     <div className="grid gap-5">
@@ -406,9 +418,11 @@ function TodayView({ dashboard, schedule, actionWindows, health, loading, error 
           <p className="mt-4 break-words text-5xl font-semibold tracking-tight text-[#202326] sm:text-6xl">
             {loading ? "Loading" : formatEuro(primaryPnl)}
           </p>
+          <p className="mt-3 text-sm font-semibold text-stone-500">
+            Estimated battery wear cost: <span className="text-[#202326]">{formatEuro(degradationCost)}</span>
+          </p>
           <div className="mt-5 flex flex-wrap gap-2">
             <SmallChip label={getCycleCapLabel(health)} tone="green" />
-            <SmallChip label={dashboard?.forecasting?.available ? "ML dispatch" : "DAM dispatch"} />
           </div>
         </Card>
 
@@ -590,7 +604,7 @@ function HealthChip({ label, value, pass }) {
 }
 
 function EvidenceView({ dashboard }) {
-  const { raw, headline, cumulativePnl, modelStability, pairedUplift, futureMarketImpact } = getEvidenceSlice(dashboard);
+  const { raw, headline, cumulativePnl, modelStability, pairedUplift } = getEvidenceSlice(dashboard);
   const bestTotal = headline.best_ml_by_total_realized_net_revenue_eur ?? {};
   const bestModel = normalizeModelKey(headline.best_model ?? bestTotal.model_or_method ?? bestTotal.strategy);
   const bestLabel = formatModelName(bestModel);
@@ -600,7 +614,6 @@ function EvidenceView({ dashboard }) {
   const maeWinner = modelStability.find((row) => row.criterion === "mae") ?? {};
   const ridgePair = pairedUplift.find((row) => normalizeModelKey(row.comparison_model) === "ridge") ?? {};
   const statusLabel = raw.available ? "Research artifacts loaded" : "Fallback demo values shown";
-  const stressStrategy = formatModelName(futureMarketImpact.strategy_model);
 
   return (
     <div className="grid gap-5">
@@ -632,21 +645,53 @@ function EvidenceView({ dashboard }) {
 
         <Card className="p-6">
           <div className="mb-4 flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-            <h2 className="text-lg font-semibold tracking-tight text-[#202326]">Future BESS Stress Test</h2>
-            <SmallChip label={`Stress strategy: ${stressStrategy}`} tone="green" />
+            <h2 className="text-lg font-semibold tracking-tight text-[#202326]">Greece By 2030</h2>
+            <SmallChip label="Planning case: ~5 GW BESS" tone="green" />
           </div>
-          <div className="grid gap-3 md:grid-cols-3">
-            {(futureMarketImpact.scenarios ?? []).map((scenario) => (
-              <div key={scenario.scenario} className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">{scenario.scenario}</p>
-                <p className="mt-2 text-2xl font-semibold tracking-tight text-[#202326]">{formatPercent(scenario.reoptimized_degradation_pct, 1)}</p>
-                <p className="mt-1 text-xs text-stone-500">reoptimized degradation</p>
+          <div className="grid gap-5 md:grid-cols-[0.95fr_1.05fr]">
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+              <svg viewBox="0 0 360 170" className="h-44 w-full" role="img" aria-label="Estimated revenue path under 2030 BESS spread compression">
+                <line x1="42" x2="42" y1="26" y2="128" stroke="#d7d0c4" strokeWidth="2" />
+                <line x1="42" x2="326" y1="128" y2="128" stroke="#d7d0c4" strokeWidth="2" />
+                <line x1="42" x2="326" y1="64" y2="64" stroke="#eee7dc" strokeWidth="1.5" strokeDasharray="5 7" />
+                <path d="M72 52 C126 60 157 82 196 96 S270 109 310 91" fill="none" stroke="#9ca3af" strokeWidth="4" strokeLinecap="round" strokeDasharray="8 8" />
+                <path d="M72 52 C128 58 158 74 198 84 S270 92 310 76" fill="none" stroke="#2f9d66" strokeWidth="5" strokeLinecap="round" />
+                <circle cx="72" cy="52" r="5" fill="#2f9d66" />
+                <circle cx="310" cy="76" r="6" fill="#2f9d66" />
+                <circle cx="310" cy="91" r="5" fill="#9ca3af" />
+                <text x="42" y="20" textAnchor="middle" className="fill-stone-500 text-[10px] font-semibold">revenue</text>
+                <text x="72" y="148" textAnchor="middle" className="fill-stone-500 text-[11px] font-semibold">today</text>
+                <text x="310" y="148" textAnchor="middle" className="fill-[#2f9d66] text-[11px] font-semibold">2030</text>
+                <text x="256" y="35" className="fill-[#202326] text-[13px] font-semibold">adaptive strategy</text>
+                <text x="223" y="116" className="fill-stone-500 text-[12px] font-semibold">static arbitrage</text>
+                <text x="180" y="161" textAnchor="middle" className="fill-stone-500 text-[10px]">estimated path as spreads compress with ~5 GW BESS</text>
+              </svg>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-[#202326]">Strategy adjustment</p>
+              <div className="mt-3 grid gap-3">
+                <FutureStep number="1" title="Retrain more often" text="Use fresh public prices as storage changes the price shape." />
+                <FutureStep number="2" title="Expect spread compression" text="Do not assume today's midday-evening margins stay fixed." />
+                <FutureStep number="3" title="Keep battery-aware dispatch" text="Let cycle cap, SoC, efficiency, and wear cost decide when to trade." />
               </div>
-            ))}
+            </div>
           </div>
-          <p className="mt-4 text-sm text-stone-500">Spread-compression stress only; not a Greek price forecast.</p>
         </Card>
       </section>
+    </div>
+  );
+}
+
+function FutureStep({ number, title, text }) {
+  return (
+    <div className="flex gap-3">
+      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-[#f2faf5] text-sm font-semibold text-[#2f9d66]">
+        {number}
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-[#202326]">{title}</p>
+        <p className="mt-0.5 text-sm text-stone-500">{text}</p>
+      </div>
     </div>
   );
 }
@@ -670,9 +715,9 @@ function CumulativePnlChart({ cumulativePnl, mlPnl, baselinePnl }) {
     );
   }
 
-  const width = 980;
-  const height = 390;
-  const pad = { top: 26, right: 172, bottom: 42, left: 78 };
+  const width = 1040;
+  const height = 420;
+  const pad = { top: 42, right: 240, bottom: 48, left: 82 };
   const innerWidth = width - pad.left - pad.right;
   const innerHeight = height - pad.top - pad.bottom;
   const maxValue = Math.max(
@@ -680,7 +725,7 @@ function CumulativePnlChart({ cumulativePnl, mlPnl, baselinePnl }) {
     ...rows.map((row) => asNumber(row.ml_cumulative_pnl_eur)),
     ...rows.map((row) => asNumber(row.baseline_cumulative_pnl_eur)),
   );
-  const yMax = Math.ceil(maxValue / 1_000_000) * 1_000_000;
+  const yMax = Math.ceil((maxValue * 1.14) / 500_000) * 500_000;
   const ticks = Array.from({ length: Math.floor(yMax / 1_000_000) + 1 }, (_, index) => index * 1_000_000);
 
   const pointFor = (row, index, key) => {
@@ -701,6 +746,20 @@ function CumulativePnlChart({ cumulativePnl, mlPnl, baselinePnl }) {
   const finalMl = pointFor(finalRow, finalIndex, "ml_cumulative_pnl_eur");
   const finalBaseline = pointFor(finalRow, finalIndex, "baseline_cumulative_pnl_eur");
   const finalGap = asNumber(finalRow.cumulative_uplift_eur, asNumber(mlPnl) - asNumber(baselinePnl));
+  const mlPath = pathFor("ml_cumulative_pnl_eur");
+  const baselinePath = pathFor("baseline_cumulative_pnl_eur");
+  const advantagePath = `${mlPath} ${rows
+    .slice()
+    .reverse()
+    .map((row, reverseIndex) => {
+      const point = pointFor(row, rows.length - 1 - reverseIndex, "baseline_cumulative_pnl_eur");
+      return `L ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    })
+    .join(" ")} Z`;
+  const labelX = finalMl.x + 24;
+  const mlLabelY = Math.max(finalMl.y - 8, pad.top + 28);
+  const gapLabelY = mlLabelY + 44;
+  const baselineLabelY = gapLabelY + 46;
 
   return (
     <Card className="p-6">
@@ -749,21 +808,27 @@ function CumulativePnlChart({ cumulativePnl, mlPnl, baselinePnl }) {
             );
           })}
 
-          <path d={pathFor("baseline_cumulative_pnl_eur")} pathLength="1" fill="none" stroke="#9ca3af" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="pnl-path pnl-path-muted" />
-          <path d={pathFor("ml_cumulative_pnl_eur")} pathLength="1" fill="none" stroke="#2f9d66" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className="pnl-path" />
+          <path d={advantagePath} fill="#2f9d66" opacity="0.12" />
+          <path d={baselinePath} pathLength="1" fill="none" stroke="#9ca3af" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" className="pnl-path pnl-path-muted" />
+          <path d={mlPath} pathLength="1" fill="none" stroke="#2f9d66" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" className="pnl-path" />
 
           <line x1={finalMl.x} x2={finalMl.x} y1={finalMl.y} y2={finalBaseline.y} stroke="#d7d0c4" strokeWidth="2" />
-          <circle cx={finalMl.x} cy={finalMl.y} r="5.5" fill="#2f9d66" />
-          <circle cx={finalBaseline.x} cy={finalBaseline.y} r="5" fill="#9ca3af" />
+          <circle cx={finalMl.x} cy={finalMl.y} r="7" fill="#2f9d66" />
+          <circle cx={finalBaseline.x} cy={finalBaseline.y} r="6" fill="#9ca3af" />
 
-          <text x={finalMl.x + 14} y={finalMl.y + 4} className="fill-[#202326] text-[14px] font-semibold">
+          <rect x={labelX - 10} y={mlLabelY - 25} width="172" height="40" rx="8" fill="white" stroke="#cfe5d7" />
+          <text x={labelX} y={mlLabelY + 2} className="fill-[#202326] text-[18px] font-semibold">
             {formatEuroCompact(finalRow.ml_cumulative_pnl_eur, 3)}
           </text>
-          <text x={finalBaseline.x + 14} y={finalBaseline.y + 4} className="fill-stone-500 text-[14px] font-semibold">
-            {formatEuroCompact(finalRow.baseline_cumulative_pnl_eur, 3)}
-          </text>
-          <text x={finalMl.x + 14} y={(finalMl.y + finalBaseline.y) / 2 - 9} className="fill-[#2f9d66] text-[13px] font-semibold">
+
+          <rect x={labelX - 10} y={gapLabelY - 22} width="150" height="38" rx="19" fill="#f2faf5" stroke="#cfe5d7" />
+          <text x={labelX + 12} y={gapLabelY + 3} className="fill-[#2f9d66] text-[16px] font-semibold">
             +{formatEuroCompact(finalGap, 0)}
+          </text>
+
+          <rect x={labelX - 10} y={baselineLabelY - 25} width="172" height="40" rx="8" fill="white" stroke="#e5e7eb" />
+          <text x={labelX} y={baselineLabelY + 2} className="fill-stone-500 text-[17px] font-semibold">
+            {formatEuroCompact(finalRow.baseline_cumulative_pnl_eur, 3)}
           </text>
 
           <text x={pad.left} y={height - 12} className="fill-stone-500 text-[12px]">
@@ -814,8 +879,6 @@ function EvidenceMetric({ label, value, detail }) {
 
 function DetailsView({ dashboard, schedule, health, batteryParams, loading, onApplyBatteryParams }) {
   const params = dashboard?.asset?.params ?? {};
-  const forecasting = dashboard?.forecasting ?? {};
-  const registry = forecasting.registry ?? {};
 
   return (
     <div className="grid gap-5 lg:grid-cols-2">
@@ -840,8 +903,6 @@ function DetailsView({ dashboard, schedule, health, batteryParams, loading, onAp
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <CompactFact label="Delivery date" value={formatDateLabel(dashboard?.delivery_date)} />
           <CompactFact label="Market" value={dashboard?.asset?.market ?? "HEnEx Day-Ahead Market"} />
-          <CompactFact label="Forecast mode" value={forecasting.available ? "Available" : "Unavailable"} />
-          <CompactFact label="Selected model" value={registry.selected_model ?? "Direct optimizer"} />
         </div>
       </Card>
 

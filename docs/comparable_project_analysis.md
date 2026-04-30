@@ -23,7 +23,7 @@ Why it is close:
 - It optimizes a BESS over 96 quarter-hour intervals.
 - It has explicit SoC, charge, discharge, cycle, and market-position constraints.
 - It separates day-ahead auction, intraday auction, and intraday continuous decisions.
-- It includes a mathematical formulation, which is useful for judge-facing model explanation.
+- It includes a mathematical formulation, which is useful for model explanation.
 
 What we embedded:
 

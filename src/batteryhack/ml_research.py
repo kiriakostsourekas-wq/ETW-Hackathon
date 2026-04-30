@@ -33,6 +33,8 @@ DEFAULT_RESEARCH_MODEL_CANDIDATES = (
     "scarcity_ensemble",
 )
 SUPPORTED_RESEARCH_MODEL_CANDIDATES = DEFAULT_RESEARCH_MODEL_CANDIDATES + (
+    "xgboost",
+    "scarcity_ensemble_xgboost",
     "scarcity_ensemble_conservative",
 )
 
@@ -43,6 +45,7 @@ SCARCITY_BASE_MODELS = (
     "hist_gradient_boosting",
     "interval_profile",
 )
+SCARCITY_XGBOOST_BASE_MODELS = SCARCITY_BASE_MODELS + ("xgboost",)
 SCARCITY_VALIDATION_DAYS = 3
 SCARCITY_DISAGREEMENT_THRESHOLD_EUR_MWH = 18.0
 SCARCITY_CONSERVATIVE_SHRINK = 0.35
@@ -343,14 +346,21 @@ def forecast_with_research_model(
     if train.empty:
         raise ForecastingError(f"{model_name} needs prior training rows")
 
-    if forecast_model_name == "scarcity_ensemble":
+    if forecast_model_name in {"scarcity_ensemble", "scarcity_ensemble_xgboost"}:
         if battery_params is None:
-            raise ForecastingError("scarcity_ensemble requires battery_params")
+            raise ForecastingError(f"{forecast_model_name} requires battery_params")
+        base_models = (
+            SCARCITY_XGBOOST_BASE_MODELS
+            if forecast_model_name == "scarcity_ensemble_xgboost"
+            else SCARCITY_BASE_MODELS
+        )
         return _scarcity_ensemble_forecast(
             train,
             target_frame,
             battery_params,
             feature_set=feature_set,
+            ensemble_name=forecast_model_name,
+            base_models=base_models,
         )
 
     if forecast_model_name == "interval_profile":
@@ -680,18 +690,20 @@ def _scarcity_ensemble_forecast(
     target: pd.DataFrame,
     battery_params: BatteryParams,
     feature_set: str,
+    ensemble_name: str = "scarcity_ensemble",
+    base_models: tuple[str, ...] = SCARCITY_BASE_MODELS,
 ) -> CandidateForecast:
     target_dates = sorted(target["timestamp"].dt.date.unique())
     if target_dates:
         train = train[train["timestamp"].dt.date < target_dates[0]].copy()
     if train.empty:
-        raise ForecastingError("scarcity_ensemble needs prior training rows")
+        raise ForecastingError(f"{ensemble_name} needs prior training rows")
 
-    base_predictions = _scarcity_base_prediction_frame(train, target, feature_set)
+    base_predictions = _scarcity_base_prediction_frame(train, target, feature_set, base_models)
     if len(base_predictions.columns) < 2:
-        raise ForecastingError("scarcity_ensemble has fewer than two trainable base models")
+        raise ForecastingError(f"{ensemble_name} has fewer than two trainable base models")
 
-    validation = _recent_validation_model_scores(train, battery_params, feature_set)
+    validation = _recent_validation_model_scores(train, battery_params, feature_set, base_models)
     weights = _scarcity_weights(validation, tuple(base_predictions.columns))
     weight_array = np.array([weights[column] for column in base_predictions.columns], dtype=float)
     forecast_values = base_predictions.to_numpy(float) @ weight_array
@@ -729,7 +741,7 @@ def _scarcity_ensemble_forecast(
         "max_model_disagreement_eur_mwh": float(disagreement.max()),
     }
     return CandidateForecast(
-        model="scarcity_ensemble",
+        model=ensemble_name,
         forecast=forecast,
         feature_columns=tuple(base_predictions.columns),
         diagnostics=diagnostics,
@@ -741,9 +753,10 @@ def _scarcity_base_prediction_frame(
     train: pd.DataFrame,
     target: pd.DataFrame,
     feature_set: str,
+    base_models: tuple[str, ...] = SCARCITY_BASE_MODELS,
 ) -> pd.DataFrame:
     predictions: dict[str, np.ndarray] = {}
-    for model_name in SCARCITY_BASE_MODELS:
+    for model_name in base_models:
         try:
             candidate = forecast_with_research_model(
                 train,
@@ -761,6 +774,7 @@ def _recent_validation_model_scores(
     train: pd.DataFrame,
     battery_params: BatteryParams,
     feature_set: str,
+    base_models: tuple[str, ...] = SCARCITY_BASE_MODELS,
 ) -> pd.DataFrame:
     validation_dates = _available_training_dates(train)[-SCARCITY_VALIDATION_DAYS:]
     rows: list[dict[str, float | str]] = []
@@ -779,7 +793,7 @@ def _recent_validation_model_scores(
             continue
         oracle_net = float(oracle.metrics["net_revenue_eur"])
 
-        for model_name in SCARCITY_BASE_MODELS:
+        for model_name in base_models:
             try:
                 candidate = forecast_with_research_model(
                     subtrain,
@@ -1027,6 +1041,29 @@ def _build_estimator(model_name: str):
                 max_features=0.8,
                 random_state=42,
                 n_jobs=1,
+            ),
+        )
+    if model_name == "xgboost":
+        try:
+            from xgboost import XGBRegressor
+        except ImportError as exc:
+            raise ForecastingError(
+                "xgboost model requested but the xgboost package is not installed"
+            ) from exc
+        return make_pipeline(
+            SimpleImputer(strategy="median"),
+            XGBRegressor(
+                n_estimators=160,
+                max_depth=3,
+                learning_rate=0.05,
+                subsample=0.85,
+                colsample_bytree=0.85,
+                reg_lambda=2.0,
+                objective="reg:squarederror",
+                random_state=42,
+                n_jobs=1,
+                tree_method="hist",
+                verbosity=0,
             ),
         )
     raise ForecastingError(f"Unsupported research model: {model_name}")

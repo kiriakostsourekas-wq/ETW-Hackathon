@@ -26,7 +26,7 @@ from batteryhack.strategy_comparison import (
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=(
-            "Build one same-date comparison for Agent 1 ML strategies versus the "
+            "Build one same-date comparison for ML strategies versus the "
             "UK naive baseline on Greek DAM data."
         )
     )

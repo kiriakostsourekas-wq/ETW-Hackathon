@@ -37,7 +37,16 @@ strategy-comparison commands with the intended parameter preset.
 
 ## Local Launch
 
-Install dependencies:
+The simplest way to run the submission demo locally is:
+
+```bash
+python3 run_dashboard.py
+```
+
+The runner starts the Python optimizer API and the React dashboard, and prints
+the local Vite URL, usually `http://127.0.0.1:5173/`.
+
+Manual setup is also supported. Install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
@@ -58,16 +67,10 @@ cd frontend && npm run dev
 
 Open the Vite URL printed by the frontend, usually `http://127.0.0.1:5173/`.
 
-One-line UI run from a fresh pull:
-
-```bash
-python -m pip install -r requirements.txt && (cd frontend && npm install) && (PYTHONPATH=$PWD/src python -m batteryhack.api_server & API_PID=$!; trap 'kill $API_PID' EXIT; cd frontend && npm run dev)
-```
-
-This opens the local API and Vite dashboard in one terminal. The dashboard has
-presentation fallback evidence, so a clean clone can run the UI without committing
-generated CSV data. If you need regenerated research artifacts instead of the
-embedded fallback, run the commands in **Reproduce The Evidence**.
+The dashboard includes a compact committed fallback payload, so a clean clone can
+show the core demo and evidence even before regenerated CSV artifacts are
+available. To regenerate the research artifacts from source, run the commands in
+**Reproduce The Evidence**.
 
 ## Quick Future-Stress Run After Pull
 
@@ -108,7 +111,7 @@ PYTHONPATH=src python scripts/run_ml_research.py \
   --start 2026-03-22 \
   --end 2026-04-29 \
   --min-train-days 14 \
-  --models ridge,scarcity_ensemble,scarcity_ensemble_conservative \
+  --models ridge,scarcity_ensemble \
   --summary-output ml_research_scarcity_summary.csv \
   --daily-output ml_research_scarcity_daily.csv \
   --predictions-output ml_research_scarcity_predictions.csv \
@@ -118,9 +121,6 @@ PYTHONPATH=src python scripts/run_ml_research.py \
   --model-stability-output ml_research_scarcity_model_stability.csv \
   --paired-uplift-output ml_research_scarcity_paired_uplift.csv
 ```
-
-`scarcity_ensemble_conservative` is included only as an experimental
-risk-control comparison. It is not the presentation headline.
 
 Regenerate the official ML-versus-UK benchmark:
 
@@ -166,9 +166,9 @@ ignored by git. Recreate those artifacts with the commands above.
 - IPTO/ADMIE market files: https://www.admie.gr/en/market/market-statistics/file-download-api
 - Open-Meteo API: https://open-meteo.com/en/docs
 
-## Demo Guidance
+## Submission Notes
 
-Use `docs/demo_runbook.md` and `docs/submission_checklist.md` for the 5-minute
-video flow. The benchmark is the implementable UK naive baseline on the same
-Greek delivery days and battery assumptions. The oracle is only an upper-bound
-diagnostic, not the benchmark.
+The benchmark is the implementable UK naive baseline on the same Greek delivery
+days and battery assumptions. The oracle is only an upper-bound diagnostic, not
+the benchmark. A concise recording script is available at
+`docs/video_demo_script_5min.md`.

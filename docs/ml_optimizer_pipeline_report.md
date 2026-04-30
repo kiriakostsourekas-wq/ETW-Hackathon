@@ -349,7 +349,6 @@ The optimizer enforces:
 - energy balance across intervals,
 - round-trip efficiency losses,
 - optional daily cycle cap,
-- optional no simultaneous charge/discharge.
 
 The terminal SoC constraint matters because it prevents the optimizer from
 artificially draining the battery at the end of the day to inflate revenue.
@@ -383,23 +382,5 @@ There are two related but slightly different ML artifact families in the workspa
   scarcity ensemble total is EUR 2.968M against the UK naive baseline.
 
 Both support the same conclusion: Scarcity Ensemble is the best project strategy.
-For slides, demo, and submission narrative, use `strategy_comparison_headline.json`
-as the source of truth.
-
-## What To Say In The Presentation
-
-Use this wording:
-
-> We forecast Greek DAM prices from public live-safe features, then pass the
-> forecast into a physical battery optimizer. The final model is a scarcity-aware
-> ensemble that weights Ridge, tree models, and an interval profile by recent
-> battery capture value, not just price MAE. This lets the strategy adapt under
-> data scarcity without needing Greek BESS telemetry.
-
-Avoid saying:
-
-- "The model learned Greek battery behavior."
-- "Oracle is our benchmark."
-- "Future BESS scenarios are price forecasts."
-- "Ridge is the final champion."
-- "The EUR 397k uplift is guaranteed out of sample."
+For the official submission result, use `strategy_comparison_headline.json` as
+the source of truth.

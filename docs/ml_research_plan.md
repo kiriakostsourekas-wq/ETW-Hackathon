@@ -40,9 +40,10 @@ Current candidates use only the available project dependencies: `pandas`, `numpy
   a Ridge meta-model on the latest prior validation days only; if there is not enough meta data it
   falls back to an average ensemble of trainable base models.
 
-Future candidates worth documenting, not adding yet, are LightGBM, XGBoost, quantile gradient
-boosting, and weather-regime or curve-depth specialists. Those should wait until the public-data run
-shows where the current sklearn candidates fail.
+XGBoost is implemented as an optional research candidate only. It is not part of
+the default model list or the official submission headline. Future candidates
+worth documenting, not adding yet, are LightGBM, quantile gradient boosting, and
+weather-regime or curve-depth specialists.
 
 ## Metrics
 
@@ -242,10 +243,11 @@ diagnostics:
 - each base model forecast,
 - each base model weight.
 
-The optional `scarcity_ensemble_conservative` variant uses the same ensemble forecast, then shrinks
-forecast deviations toward the daily median on high-disagreement days. This does not change the
-optimizer; it changes only the price vector submitted to the existing price-taking optimizer, so
-stronger predicted spreads are required before dispatch.
+Optional experimental variants are kept outside the headline path. The
+`scarcity_ensemble_conservative` variant shrinks forecast deviations toward the
+daily median on high-disagreement days. The `scarcity_ensemble_xgboost` variant
+adds an optional XGBoost base learner when the `xgboost` package is installed.
+Neither variant is part of the official submission claim.
 
 Run completed:
 
@@ -296,10 +298,8 @@ Interpretation:
 - It wins most paired days against Ridge and improves MAE, quartile accuracy, and capture.
 - Against this three-model run, scarcity improves the worst daily PnL floor, p10 daily PnL,
   and sub-0.70 capture count. It does not reduce sub-0.60 capture days versus Ridge.
-- `scarcity_ensemble_conservative` remains an experimental risk-control candidate. It is
-  supported by the harness but is not included in the final headline run.
-- Current recommendation: headline `scarcity_ensemble` as the promising PnL/capture
-  improvement and keep conservative dispatch as an unfinished risk-control hook.
+- Current recommendation: headline `scarcity_ensemble` as the validated
+  PnL/capture improvement and keep optional variants as research extensions.
 
 For the presentation benchmark, the authoritative UK comparison is not any
 `ml_research_*paired_uplift.csv` row. Build `strategy_comparison_headline.json` from

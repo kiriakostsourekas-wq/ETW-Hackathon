@@ -31,7 +31,10 @@ Backward-compatible `run_persistence_*` aliases remain available, but new benchm
 
 ## Output Contract
 
-The baseline CSV is designed to be joined to Agent 1 ML daily results on `delivery_date`. If Agent 1 emits one row per model per day, keep `delivery_date` as the join key and use each side's method/model column to identify the strategy.
+The baseline CSV is designed to be joined to ML daily results on
+`delivery_date`. If the ML run emits one row per model per day, keep
+`delivery_date` as the join key and use each side's method/model column to
+identify the strategy.
 
 Required comparison columns:
 
@@ -112,7 +115,7 @@ To compare a different ML run, pass the same `--history-start`, `--start`, `--en
 
 ## Strategy Comparison Layer
 
-Once Agent 1 has written `data/processed/ml_research_scarcity_daily.csv`, run:
+Once `data/processed/ml_research_scarcity_daily.csv` exists, run:
 
 ```bash
 PYTHONPATH=src python scripts/run_strategy_comparison.py \
@@ -121,7 +124,7 @@ PYTHONPATH=src python scripts/run_strategy_comparison.py \
   --models scarcity_ensemble
 ```
 
-The script consumes Agent 1 scarcity-ensemble daily rows and uses
+The script consumes scarcity-ensemble daily rows and uses
 `ml_research_scarcity_predictions.csv` when it is present. It runs the UK naive baseline over
 the same delivery-date window with `BATTERY_PRESETS[METLEN_PRESET_NAME].to_params()`,
 unless a precomputed baseline CSV is passed with `--baseline-daily`.
@@ -151,7 +154,10 @@ realized_equivalent_cycles
 realized_captured_spread_eur_mwh
 ```
 
-Strategy names are `ml_<model name>` for Agent 1 models and `uk_naive_baseline` for the benchmark. Summary rows report total PnL, average PnL/day, average oracle capture, win-rate versus the UK baseline, and total uplift versus the UK baseline using only shared delivery dates.
+Strategy names are `ml_<model name>` for ML strategies and
+`uk_naive_baseline` for the benchmark. Summary rows report total PnL, average
+PnL/day, average oracle capture, win-rate versus the UK baseline, and total
+uplift versus the UK baseline using only shared delivery dates.
 
 ## Current Comparison Evidence
 

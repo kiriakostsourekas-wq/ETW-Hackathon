@@ -21,7 +21,7 @@ def validate_market_frame(frame: pd.DataFrame) -> list[str]:
 
 
 def heuristic_threshold_schedule(frame: pd.DataFrame, power_mw: float, capacity_mwh: float) -> dict[str, float]:
-    """Simple judge-friendly baseline: charge low quartile, discharge high quartile."""
+    """Simple heuristic baseline: charge low quartile, discharge high quartile."""
     prices = frame["dam_price_eur_mwh"]
     low = prices.quantile(0.25)
     high = prices.quantile(0.75)
