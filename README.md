@@ -58,6 +58,17 @@ cd frontend && npm run dev
 
 Open the Vite URL printed by the frontend, usually `http://127.0.0.1:5173/`.
 
+One-line UI run from a fresh pull:
+
+```bash
+python -m pip install -r requirements.txt && (cd frontend && npm install) && (PYTHONPATH=$PWD/src python -m batteryhack.api_server & API_PID=$!; trap 'kill $API_PID' EXIT; cd frontend && npm run dev)
+```
+
+This opens the local API and Vite dashboard in one terminal. The dashboard has
+presentation fallback evidence, so a clean clone can run the UI without committing
+generated CSV data. If you need regenerated research artifacts instead of the
+embedded fallback, run the commands in **Reproduce The Evidence**.
+
 ## Quick Future-Stress Run After Pull
 
 From the repo root, run:
