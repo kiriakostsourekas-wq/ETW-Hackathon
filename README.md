@@ -58,6 +58,25 @@ cd frontend && npm run dev
 
 Open the Vite URL printed by the frontend, usually `http://127.0.0.1:5173/`.
 
+## Quick Future-Stress Run After Pull
+
+From the repo root, run:
+
+```bash
+PYTHONPATH=src python scripts/run_future_market_impact.py --input data/processed/strategy_comparison_intervals.csv
+```
+
+This reruns the future BESS spread-compression stress test using the final
+strategy-comparison interval schedules and writes:
+
+- `data/processed/future_market_impact_summary.csv`
+- `data/processed/future_market_impact_intervals.csv`
+- `data/processed/future_market_impact_headline.json`
+
+Prerequisite: `data/processed/strategy_comparison_intervals.csv` must exist. If
+it is missing after a clean pull, first run the ML research and strategy
+comparison commands in **Reproduce The Evidence** below.
+
 ## Validation
 
 Run the release checks before recording or submitting:
